@@ -40,7 +40,7 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
           id="totalCardsBtn"
           type="button"
           style="
-            border:2px solid #000;
+            border:2px solid #555;        /* lighter outline */
             border-radius:12px;
             padding:8px 12px;
             background:#fff;
@@ -95,7 +95,7 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
 
   function addCardAndScrollToTop() {
     const newC = blankCard();
-    state.cards.unshift(newC); // add at top
+    state.cards.unshift(newC);
     save();
     renderAll();
 
@@ -108,10 +108,10 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
 
   appEl.querySelector("#addCardBottom").addEventListener("click", addCardAndScrollToTop);
 
-  // NEW: Click Total Cards box to set deck size
+  // Click Total Cards box to set deck size
   appEl.querySelector("#totalCardsBtn").addEventListener("click", () => {
     const current = state.cards.length;
-    const raw = prompt("Enter total number of cards:", String(current));
+    const raw = prompt("Enter Total Number of Cards:", String(current));
     if (raw === null) return;
 
     const desired = Number.parseInt(raw, 10);
@@ -121,7 +121,6 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
       return;
     }
 
-    // Optional sanity cap so someone doesn’t accidentally type 100000
     const capped = Math.min(desired, 500);
 
     if (capped < current) {
@@ -135,11 +134,9 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
     } else if (capped > current) {
       const toAdd = capped - current;
       const newCards = Array.from({ length: toAdd }, () => blankCard());
-
-      // Add new blanks to the TOP (matches your add-from-top rule)
-      state.cards = newCards.concat(state.cards);
+      state.cards = newCards.concat(state.cards); // add to top
     } else {
-      return; // no change
+      return;
     }
 
     save();
