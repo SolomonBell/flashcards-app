@@ -43,16 +43,17 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
         <div>Total cards: <strong>${totalCount}</strong></div>
       </div>
 
-      <div class="btns" style="margin-top:12px;">
-        <button class="primary" id="startStudy" ${validCount < 1 ? "disabled" : ""}>Start Studying</button>
-      </div>
+      <div id="cardsList" style="margin-top:12px;"></div>
 
-      <!-- Add Card button ABOVE the list, aligned far right -->
-      <div class="btns" style="margin-top:12px; justify-content:flex-end;">
-        <button class="primary" id="addCardTop">Add Card</button>
+      <!-- Bottom action row -->
+      <div class="btns" style="margin-top:16px; justify-content:space-between;">
+        <button class="primary" id="startStudy" ${validCount < 1 ? "disabled" : ""}>
+          Start Studying
+        </button>
+        <button class="primary" id="addCardBottom">
+          Add Card
+        </button>
       </div>
-
-      <div id="cardsList"></div>
     </section>
   `;
 
@@ -67,7 +68,6 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
       return;
     }
 
-    // Keep only valid cards; normalize trims; keep progress fields
     state.cards = valid.map(c => ({
       ...c,
       front: c.front.trim(),
@@ -83,22 +83,18 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
 
   function addCardAndScrollToTop() {
     const newC = blankCard();
-
-    // NEW: add from the TOP
-    state.cards.unshift(newC);
-
+    state.cards.unshift(newC); // add at top
     save();
     renderAll();
 
     requestAnimationFrame(() => {
       const el = document.querySelector(`.cardRow[data-id="${newC.id}"]`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      // focus the front textarea
       el?.querySelector('textarea[data-field="front"]')?.focus();
     });
   }
 
-  appEl.querySelector("#addCardTop").addEventListener("click", addCardAndScrollToTop);
+  appEl.querySelector("#addCardBottom").addEventListener("click", addCardAndScrollToTop);
 
   // Render list + wire handlers
   const listWrap = appEl.querySelector("#cardsList");
