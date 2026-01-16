@@ -40,7 +40,7 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
       </div>
 
       <div class="deckStats" style="margin-top:10px;">
-        <div>Total cards: <strong>${totalCount}</strong></div>
+        <div>Total Cards: <strong>${totalCount}</strong></div>
       </div>
 
       <div id="cardsList" style="margin-top:12px;"></div>
