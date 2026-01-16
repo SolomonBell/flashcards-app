@@ -2,9 +2,13 @@
 
 const STORAGE_KEY = "flashcards_app_v1";
 
+// How often to "inject" a Stage 3 (memorized) card during normal study.
+// 0.20 = ~20% of prompts become Stage 3 if any exist.
+const STAGE3_INJECTION_CHANCE = 0.20;
+
 let state = loadState() ?? {
   screen: "create", // "create" | "study"
-  cards: [],        // {id, front, back, stage, nextReviewAt, createdAt, lastSeenAt}
+  cards: [],        // {id, front, back, stage, createdAt, lastSeenAt}
 };
 
 const appEl = document.getElementById("app");
@@ -14,8 +18,15 @@ function uid() {
   return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
 }
 
-function normalizeText(s) {
-  return (s ?? "").trim();
+// User requested: NOT case sensitive, otherwise exact.
+// We only trim leading/trailing whitespace and lowercase.
+// So "Hello" === "hello", but "hello" !== "h ello".
+function normalizeForExactNoCase(s) {
+  return String(s ?? "").trim().toLowerCase();
+}
+
+function isCorrectRecall(userAnswer, correctAnswer) {
+  return normalizeForExactNoCase(userAnswer) === normalizeForExactNoCase(correctAnswer);
 }
 
 function saveState() {
@@ -73,14 +84,13 @@ function blankCard() {
     front: "",
     back: "",
     stage: 1,
-    nextReviewAt: null,
     createdAt: Date.now(),
     lastSeenAt: null,
   };
 }
 
 function getValidCards() {
-  return state.cards.filter(c => normalizeText(c.front) && normalizeText(c.back));
+  return state.cards.filter(c => c.front.trim() && c.back.trim());
 }
 
 /* ---------------- Study Logic ---------------- */
@@ -107,21 +117,35 @@ function pickLeastRecentlySeen(list) {
   return best;
 }
 
+// Your desired behavior:
+// - Stage 3 cards come up randomly throughout the process.
+// - If everything is Stage 3, keep showing them forever (random/rotating).
+// - Still prioritize Stage 1/2 learning, but inject Stage 3 sometimes.
 function pickNextCard(cards) {
-  const now = Date.now();
   const stage1 = cards.filter(c => c.stage === 1);
-  if (stage1.length) return pickLeastRecentlySeen(stage1);
-
   const stage2 = cards.filter(c => c.stage === 2);
+  const stage3 = cards.filter(c => c.stage === 3);
+
+  // If everything is memorized, keep showing Stage 3 cards (rotating)
+  if (stage1.length === 0 && stage2.length === 0) {
+    return stage3.length ? pickLeastRecentlySeen(stage3) : null;
+  }
+
+  // Randomly inject a Stage 3 card if any exist
+  if (stage3.length > 0 && Math.random() < STAGE3_INJECTION_CHANCE) {
+    return pickLeastRecentlySeen(stage3);
+  }
+
+  // Otherwise focus on learning
+  if (stage1.length) return pickLeastRecentlySeen(stage1);
   if (stage2.length) return pickLeastRecentlySeen(stage2);
 
-  const stage3due = cards.filter(c => c.stage === 3 && (c.nextReviewAt ?? 0) <= now);
-  if (stage3due.length) return pickLeastRecentlySeen(stage3due);
-
-  return null;
+  // Fallback
+  return stage3.length ? pickLeastRecentlySeen(stage3) : null;
 }
 
 function buildMCOptions(currentCard, allCards) {
+  // exactly 4 options: 1 correct + 3 wrong, re-randomized every time
   const correct = { cardId: currentCard.id, text: currentCard.back, isCorrect: true };
 
   const others = allCards
@@ -130,6 +154,7 @@ function buildMCOptions(currentCard, allCards) {
 
   const wrongs = sampleN(others, Math.min(3, others.length));
 
+  // If deck too small, add filler so it always shows 4 options
   while (wrongs.length < 3) {
     wrongs.push({
       cardId: "filler-" + wrongs.length,
@@ -153,6 +178,7 @@ function render() {
   else renderStudyScreen();
 }
 
+/* -------- Create Screen -------- */
 function renderCreateScreen() {
   ensureAtLeastOneCard();
 
@@ -205,23 +231,18 @@ function renderCreateScreen() {
       return;
     }
     if (valid.length < 4) {
-      const ok = confirm(
-        "Stage 1 multiple choice is best with 4+ cards. Start studying anyway?"
-      );
+      const ok = confirm("Stage 1 multiple choice is best with 4+ cards. Start studying anyway?");
       if (!ok) return;
     }
 
-    // IMPORTANT: Study should operate on valid cards only.
-    // Easiest: remove invalid rows before study.
+    // Study uses ONLY valid cards; trim ends for storage consistency
     state.cards = valid.map(c => ({
       ...c,
-      front: normalizeText(c.front),
-      back: normalizeText(c.back),
+      front: c.front.trim(),
+      back: c.back.trim(),
+      stage: [1, 2, 3].includes(c.stage) ? c.stage : 1,
     }));
-    // Ensure all cards have stage initialized
-    state.cards.forEach(c => { if (![1,2,3].includes(c.stage)) c.stage = 1; });
 
-    saveState();
     state.screen = "study";
     saveState();
     render();
@@ -255,7 +276,7 @@ function renderCardsList() {
     </div>
   `).join("");
 
-  // Input handlers (auto-save)
+  // Auto-save edits
   listEl.querySelectorAll("input[data-field], textarea[data-field]").forEach(el => {
     el.addEventListener("input", (e) => {
       const row = e.target.closest(".cardRow");
@@ -265,14 +286,12 @@ function renderCardsList() {
       if (!card) return;
       card[field] = e.target.value;
       saveState();
-
-      // Update header stats without re-rendering everything:
-      // simplest: re-render create screen (still fast for small decks)
+      // simple refresh to update stats (fine for small decks)
       renderCreateScreen();
     });
   });
 
-  // Delete handlers
+  // Delete
   listEl.querySelectorAll('button[data-action="delete"]').forEach(btn => {
     btn.addEventListener("click", (e) => {
       const row = e.target.closest(".cardRow");
@@ -295,16 +314,14 @@ function addCardAndScroll() {
   saveState();
   renderCreateScreen();
 
-  // Scroll to the new card
   requestAnimationFrame(() => {
     const el = document.querySelector(`.cardRow[data-id="${newCard.id}"]`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    const input = el?.querySelector('input[data-field="front"]');
-    input?.focus();
+    el?.querySelector('input[data-field="front"]')?.focus();
   });
 }
 
-/* ---------------- Study Screen (Stage 1 remains) ---------------- */
+/* -------- Study Screen -------- */
 function renderStudyScreen() {
   const { s1, s2, s3, total } = countsByStage(state.cards);
   const current = pickNextCard(state.cards);
@@ -313,28 +330,8 @@ function renderStudyScreen() {
     appEl.innerHTML = `
       <section class="card">
         ${renderProgressBar(s1, s2, s3, total)}
-        <h2 style="margin:12px 0 8px;">No cards due</h2>
-        <p class="help">No Stage 1/2 cards and no Stage 3 cards are due yet.</p>
-        <div class="btns">
-          <button class="danger" id="backToCreate">Back to Create</button>
-        </div>
-      </section>
-    `;
-    document.getElementById("backToCreate").addEventListener("click", () => {
-      state.screen = "create";
-      saveState();
-      render();
-    });
-    return;
-  }
-
-  if (current.stage !== 1) {
-    appEl.innerHTML = `
-      <section class="card">
-        ${renderProgressBar(s1, s2, s3, total)}
-        <h2 style="margin:12px 0 8px;">Study (Stage ${current.stage})</h2>
-        <p class="help"><strong>Front:</strong> ${escapeHtml(current.front)}</p>
-        <p class="help">Stage 2/3 will be implemented next (exact recall + memorization scheduling).</p>
+        <h2 style="margin:12px 0 8px;">No cards available</h2>
+        <p class="help">Add some valid cards (Front + Back) to study.</p>
         <div class="btns">
           <button class="danger" id="backToCreate">Back to Create</button>
         </div>
@@ -351,6 +348,16 @@ function renderStudyScreen() {
   markSeen(current.id);
   saveState();
 
+  if (current.stage === 1) {
+    renderStage1(current);
+  } else {
+    // Stage 2 and Stage 3 both use recall format
+    renderRecall(current);
+  }
+}
+
+function renderStage1(current) {
+  const { s1, s2, s3, total } = countsByStage(state.cards);
   const options = buildMCOptions(current, state.cards);
 
   appEl.innerHTML = `
@@ -385,45 +392,139 @@ function renderStudyScreen() {
     render();
   });
 
-  const buttons = Array.from(document.querySelectorAll(".mcOpt"));
-  buttons.forEach(btn => {
+  document.querySelectorAll(".mcOpt").forEach(btn => {
     btn.addEventListener("click", (e) => {
       const i = Number(e.currentTarget.getAttribute("data-idx"));
       const choice = options[i];
 
       if (choice.isCorrect) {
         const c = state.cards.find(x => x.id === current.id);
-        if (c) c.stage = 2;
+        if (c) c.stage = 2; // Stage 1 pass -> Stage 2
         saveState();
-        renderWithFeedback(true);
+        renderFeedback({
+          correct: true,
+          current,
+          userAnswer: "(multiple choice)"
+        });
       } else {
+        // Stage 1 fail -> stay Stage 1
         saveState();
-        renderWithFeedback(false);
+        renderFeedback({
+          correct: false,
+          current,
+          userAnswer: "(multiple choice)"
+        });
       }
     });
   });
+}
 
-  function renderWithFeedback(correct) {
-    const { s1: ns1, s2: ns2, s3: ns3, total: ntotal } = countsByStage(state.cards);
-    appEl.innerHTML = `
-      <section class="card">
-        ${renderProgressBar(ns1, ns2, ns3, ntotal)}
-        <h2 style="margin:12px 0 8px;">${correct ? "✅ Correct" : "❌ Incorrect"}</h2>
-        <p class="help"><strong>Front:</strong> ${escapeHtml(current.front)}</p>
-        <p class="help"><strong>Correct definition:</strong> ${escapeHtml(current.back)}</p>
-        <div class="btns">
-          <button class="primary" id="nextBtn">Next</button>
-          <button class="danger" id="backToCreate2">Back to Create</button>
-        </div>
-      </section>
-    `;
-    document.getElementById("nextBtn").addEventListener("click", () => render());
-    document.getElementById("backToCreate2").addEventListener("click", () => {
-      state.screen = "create";
-      saveState();
-      render();
-    });
-  }
+function renderRecall(current) {
+  const { s1, s2, s3, total } = countsByStage(state.cards);
+
+  const stageLabel = current.stage === 2 ? "Stage 2" : "Stage 3";
+  const stageSub = current.stage === 2 ? "(Exact recall)" : "(Memorization check)";
+
+  appEl.innerHTML = `
+    <section class="card">
+      ${renderProgressBar(s1, s2, s3, total)}
+
+      <div style="display:flex; gap:10px; align-items: baseline; margin-top:12px;">
+        <h2 style="margin:0;">${stageLabel}</h2>
+        <span class="small">${stageSub}</span>
+      </div>
+
+      <p class="help" style="margin-top:10px;"><strong>Front:</strong> ${escapeHtml(current.front)}</p>
+      <p class="help" style="margin-top:-6px;">Type the exact definition (not case sensitive):</p>
+
+      <textarea id="recallInput" placeholder="Type the definition..."></textarea>
+
+      <div class="btns">
+        <button class="primary" id="submitRecall">Submit</button>
+        <button class="danger" id="backToCreate">Back to Create</button>
+      </div>
+
+      <p class="small" style="margin-top:10px;">
+        Matching rule: case-insensitive; otherwise exact (leading/trailing spaces ignored).
+      </p>
+    </section>
+  `;
+
+  document.getElementById("backToCreate").addEventListener("click", () => {
+    state.screen = "create";
+    saveState();
+    render();
+  });
+
+  const inputEl = document.getElementById("recallInput");
+  inputEl.focus();
+
+  // Cmd/Ctrl+Enter to submit
+  inputEl.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      document.getElementById("submitRecall").click();
+    }
+  });
+
+  document.getElementById("submitRecall").addEventListener("click", () => {
+    const userAnswer = inputEl.value ?? "";
+    const correct = isCorrectRecall(userAnswer, current.back);
+
+    const c = state.cards.find(x => x.id === current.id);
+    if (!c) return;
+
+    if (c.stage === 2) {
+      if (correct) {
+        c.stage = 3; // Stage 2 pass -> Stage 3
+      } else {
+        c.stage = 1; // Stage 2 fail -> Stage 1
+      }
+    } else if (c.stage === 3) {
+      if (correct) {
+        c.stage = 3; // remain memorized
+      } else {
+        c.stage = 2; // Stage 3 fail -> Stage 2
+      }
+    }
+
+    saveState();
+    renderFeedback({ correct, current, userAnswer });
+  });
+}
+
+function renderFeedback({ correct, current, userAnswer }) {
+  const { s1, s2, s3, total } = countsByStage(state.cards);
+
+  appEl.innerHTML = `
+    <section class="card">
+      ${renderProgressBar(s1, s2, s3, total)}
+      <h2 style="margin:12px 0 8px;">${correct ? "✅ Correct" : "❌ Incorrect"}</h2>
+
+      <p class="help"><strong>Front:</strong> ${escapeHtml(current.front)}</p>
+
+      <p class="help" style="margin-top:8px;"><strong>Your answer:</strong></p>
+      <div class="card" style="border-radius:10px; padding:12px; margin-top:-6px;">
+        <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${escapeHtml(String(userAnswer))}</pre>
+      </div>
+
+      <p class="help" style="margin-top:10px;"><strong>Correct answer:</strong></p>
+      <div class="card" style="border-radius:10px; padding:12px; margin-top:-6px;">
+        <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${escapeHtml(current.back)}</pre>
+      </div>
+
+      <div class="btns" style="margin-top:14px;">
+        <button class="primary" id="nextBtn">Next</button>
+        <button class="danger" id="backToCreate2">Back to Create</button>
+      </div>
+    </section>
+  `;
+
+  document.getElementById("nextBtn").addEventListener("click", () => render());
+  document.getElementById("backToCreate2").addEventListener("click", () => {
+    state.screen = "create";
+    saveState();
+    render();
+  });
 }
 
 function renderProgressBar(s1, s2, s3, total) {
