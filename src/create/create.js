@@ -32,12 +32,26 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
 
   appEl.innerHTML = `
     <section class="card">
-      <!-- Title -->
       <h2 style="margin:0; text-align:center;">Create Your Deck</h2>
 
-      <!-- Total Cards + Reset row -->
+      <!-- Total Cards (boxed + clickable) + Reset row -->
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
-        <div>Total Cards: <strong>${totalCount}</strong></div>
+        <button
+          id="totalCardsBtn"
+          type="button"
+          style="
+            border:2px solid #000;
+            border-radius:12px;
+            padding:8px 12px;
+            background:#fff;
+            cursor:pointer;
+            font-weight:700;
+          "
+          title="Click to set deck size"
+        >
+          Total Cards: ${totalCount}
+        </button>
+
         <button class="danger" id="resetAll">Reset</button>
       </div>
 
@@ -93,6 +107,44 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
   }
 
   appEl.querySelector("#addCardBottom").addEventListener("click", addCardAndScrollToTop);
+
+  // NEW: Click Total Cards box to set deck size
+  appEl.querySelector("#totalCardsBtn").addEventListener("click", () => {
+    const current = state.cards.length;
+    const raw = prompt("Enter total number of cards:", String(current));
+    if (raw === null) return;
+
+    const desired = Number.parseInt(raw, 10);
+
+    if (!Number.isFinite(desired) || desired < 1) {
+      alert("Please enter a whole number of 1 or more.");
+      return;
+    }
+
+    // Optional sanity cap so someone doesn’t accidentally type 100000
+    const capped = Math.min(desired, 500);
+
+    if (capped < current) {
+      const ok = confirm(
+        `This will remove ${current - capped} card(s) from the bottom of the list. Continue?`
+      );
+      if (!ok) return;
+
+      state.cards = state.cards.slice(0, capped);
+      if (state.cards.length === 0) state.cards.push(blankCard());
+    } else if (capped > current) {
+      const toAdd = capped - current;
+      const newCards = Array.from({ length: toAdd }, () => blankCard());
+
+      // Add new blanks to the TOP (matches your add-from-top rule)
+      state.cards = newCards.concat(state.cards);
+    } else {
+      return; // no change
+    }
+
+    save();
+    renderAll();
+  });
 
   // Render list + wire handlers
   const listWrap = appEl.querySelector("#cardsList");
