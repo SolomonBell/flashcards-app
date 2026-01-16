@@ -18,9 +18,7 @@ function uid() {
   return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
 }
 
-// User requested: NOT case sensitive, otherwise exact.
-// We only trim leading/trailing whitespace and lowercase.
-// So "Hello" === "hello", but "hello" !== "h ello".
+// NOT case sensitive, otherwise exact (trim ends only)
 function normalizeForExactNoCase(s) {
   return String(s ?? "").trim().toLowerCase();
 }
@@ -117,35 +115,27 @@ function pickLeastRecentlySeen(list) {
   return best;
 }
 
-// Your desired behavior:
-// - Stage 3 cards come up randomly throughout the process.
-// - If everything is Stage 3, keep showing them forever (random/rotating).
-// - Still prioritize Stage 1/2 learning, but inject Stage 3 sometimes.
+// Stage 3 should appear randomly throughout study, and forever if all are Stage 3.
 function pickNextCard(cards) {
   const stage1 = cards.filter(c => c.stage === 1);
   const stage2 = cards.filter(c => c.stage === 2);
   const stage3 = cards.filter(c => c.stage === 3);
 
-  // If everything is memorized, keep showing Stage 3 cards (rotating)
   if (stage1.length === 0 && stage2.length === 0) {
     return stage3.length ? pickLeastRecentlySeen(stage3) : null;
   }
 
-  // Randomly inject a Stage 3 card if any exist
   if (stage3.length > 0 && Math.random() < STAGE3_INJECTION_CHANCE) {
     return pickLeastRecentlySeen(stage3);
   }
 
-  // Otherwise focus on learning
   if (stage1.length) return pickLeastRecentlySeen(stage1);
   if (stage2.length) return pickLeastRecentlySeen(stage2);
 
-  // Fallback
   return stage3.length ? pickLeastRecentlySeen(stage3) : null;
 }
 
 function buildMCOptions(currentCard, allCards) {
-  // exactly 4 options: 1 correct + 3 wrong, re-randomized every time
   const correct = { cardId: currentCard.id, text: currentCard.back, isCorrect: true };
 
   const others = allCards
@@ -154,7 +144,6 @@ function buildMCOptions(currentCard, allCards) {
 
   const wrongs = sampleN(others, Math.min(3, others.length));
 
-  // If deck too small, add filler so it always shows 4 options
   while (wrongs.length < 3) {
     wrongs.push({
       cardId: "filler-" + wrongs.length,
@@ -235,7 +224,6 @@ function renderCreateScreen() {
       if (!ok) return;
     }
 
-    // Study uses ONLY valid cards; trim ends for storage consistency
     state.cards = valid.map(c => ({
       ...c,
       front: c.front.trim(),
@@ -276,7 +264,6 @@ function renderCardsList() {
     </div>
   `).join("");
 
-  // Auto-save edits
   listEl.querySelectorAll("input[data-field], textarea[data-field]").forEach(el => {
     el.addEventListener("input", (e) => {
       const row = e.target.closest(".cardRow");
@@ -286,12 +273,10 @@ function renderCardsList() {
       if (!card) return;
       card[field] = e.target.value;
       saveState();
-      // simple refresh to update stats (fine for small decks)
       renderCreateScreen();
     });
   });
 
-  // Delete
   listEl.querySelectorAll('button[data-action="delete"]').forEach(btn => {
     btn.addEventListener("click", (e) => {
       const row = e.target.closest(".cardRow");
@@ -323,13 +308,13 @@ function addCardAndScroll() {
 
 /* -------- Study Screen -------- */
 function renderStudyScreen() {
-  const { s1, s2, s3, total } = countsByStage(state.cards);
+  const counts = countsByStage(state.cards);
   const current = pickNextCard(state.cards);
 
   if (!current) {
     appEl.innerHTML = `
       <section class="card">
-        ${renderProgressBar(s1, s2, s3, total)}
+        ${renderProgressBar(counts)}
         <h2 style="margin:12px 0 8px;">No cards available</h2>
         <p class="help">Add some valid cards (Front + Back) to study.</p>
         <div class="btns">
@@ -348,21 +333,17 @@ function renderStudyScreen() {
   markSeen(current.id);
   saveState();
 
-  if (current.stage === 1) {
-    renderStage1(current);
-  } else {
-    // Stage 2 and Stage 3 both use recall format
-    renderRecall(current);
-  }
+  if (current.stage === 1) renderStage1(current);
+  else renderRecall(current);
 }
 
 function renderStage1(current) {
-  const { s1, s2, s3, total } = countsByStage(state.cards);
+  const counts = countsByStage(state.cards);
   const options = buildMCOptions(current, state.cards);
 
   appEl.innerHTML = `
     <section class="card">
-      ${renderProgressBar(s1, s2, s3, total)}
+      ${renderProgressBar(counts)}
 
       <div style="display:flex; gap:10px; align-items: baseline; margin-top:12px;">
         <h2 style="margin:0;">Stage 1</h2>
@@ -399,35 +380,26 @@ function renderStage1(current) {
 
       if (choice.isCorrect) {
         const c = state.cards.find(x => x.id === current.id);
-        if (c) c.stage = 2; // Stage 1 pass -> Stage 2
+        if (c) c.stage = 2;
         saveState();
-        renderFeedback({
-          correct: true,
-          current,
-          userAnswer: "(multiple choice)"
-        });
+        renderFeedback({ correct: true, current, userAnswer: "(multiple choice)" });
       } else {
-        // Stage 1 fail -> stay Stage 1
         saveState();
-        renderFeedback({
-          correct: false,
-          current,
-          userAnswer: "(multiple choice)"
-        });
+        renderFeedback({ correct: false, current, userAnswer: "(multiple choice)" });
       }
     });
   });
 }
 
 function renderRecall(current) {
-  const { s1, s2, s3, total } = countsByStage(state.cards);
+  const counts = countsByStage(state.cards);
 
   const stageLabel = current.stage === 2 ? "Stage 2" : "Stage 3";
   const stageSub = current.stage === 2 ? "(Exact recall)" : "(Memorization check)";
 
   appEl.innerHTML = `
     <section class="card">
-      ${renderProgressBar(s1, s2, s3, total)}
+      ${renderProgressBar(counts)}
 
       <div style="display:flex; gap:10px; align-items: baseline; margin-top:12px;">
         <h2 style="margin:0;">${stageLabel}</h2>
@@ -459,7 +431,6 @@ function renderRecall(current) {
   const inputEl = document.getElementById("recallInput");
   inputEl.focus();
 
-  // Cmd/Ctrl+Enter to submit
   inputEl.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       document.getElementById("submitRecall").click();
@@ -474,17 +445,11 @@ function renderRecall(current) {
     if (!c) return;
 
     if (c.stage === 2) {
-      if (correct) {
-        c.stage = 3; // Stage 2 pass -> Stage 3
-      } else {
-        c.stage = 1; // Stage 2 fail -> Stage 1
-      }
+      if (correct) c.stage = 3;
+      else c.stage = 1;
     } else if (c.stage === 3) {
-      if (correct) {
-        c.stage = 3; // remain memorized
-      } else {
-        c.stage = 2; // Stage 3 fail -> Stage 2
-      }
+      if (correct) c.stage = 3;
+      else c.stage = 2;
     }
 
     saveState();
@@ -493,11 +458,11 @@ function renderRecall(current) {
 }
 
 function renderFeedback({ correct, current, userAnswer }) {
-  const { s1, s2, s3, total } = countsByStage(state.cards);
+  const counts = countsByStage(state.cards);
 
   appEl.innerHTML = `
     <section class="card">
-      ${renderProgressBar(s1, s2, s3, total)}
+      ${renderProgressBar(counts)}
       <h2 style="margin:12px 0 8px;">${correct ? "✅ Correct" : "❌ Incorrect"}</h2>
 
       <p class="help"><strong>Front:</strong> ${escapeHtml(current.front)}</p>
@@ -527,22 +492,74 @@ function renderFeedback({ correct, current, userAnswer }) {
   });
 }
 
-function renderProgressBar(s1, s2, s3, total) {
-  const w1 = total ? Math.round((s1 / total) * 100) : 0;
-  const w2 = total ? Math.round((s2 / total) * 100) : 0;
-  const w3 = Math.max(0, 100 - w1 - w2);
+/* ---------------- NEW PROGRESS BAR (chunk-based) ---------------- */
+function renderProgressBar({ s1, s2, s3, total }) {
+  // Chunk logic:
+  // Yellow chunks: every card has Stage 1 done -> total
+  // Blue chunks: cards that have reached Stage 2 or 3 -> s2 + s3
+  // Green chunks: cards in Stage 3 -> s3
+  const yellow = total;
+  const blue = s2 + s3;
+  const green = s3;
+
+  const maxChunks = total * 3;
+  const filled = yellow + blue + green;
+  const grey = Math.max(0, maxChunks - filled);
+
+  // Build HTML chunks (ordered: all yellow then blue then green then grey)
+  const chunks = []
+    .concat(Array.from({ length: yellow }, () => `<span class="chunk chunk-y"></span>`))
+    .concat(Array.from({ length: blue }, () => `<span class="chunk chunk-b"></span>`))
+    .concat(Array.from({ length: green }, () => `<span class="chunk chunk-g"></span>`))
+    .concat(Array.from({ length: grey }, () => `<span class="chunk chunk-x"></span>`))
+    .join("");
+
+  // Inline styles so you don't have to touch CSS right now
+  const styles = `
+    <style>
+      .stage1Txt{ color:#b45309; font-weight:600; }   /* yellow-ish */
+      .stage2Txt{ color:#1d4ed8; font-weight:600; }   /* blue */
+      .stage3Txt{ color:#15803d; font-weight:600; }   /* green */
+
+      .chunkWrap{
+        display:flex;
+        flex-wrap:nowrap;
+        overflow:hidden;
+        border:1px solid var(--border);
+        border-radius:999px;
+        background:#f9fafb;
+        height:14px;
+      }
+      .chunk{
+        display:inline-block;
+        height:100%;
+        width:10px;               /* chunk width */
+        border-right:1px solid rgba(17,24,39,0.08);
+      }
+      .chunk-y{ background:#fde68a; } /* yellow */
+      .chunk-b{ background:#bfdbfe; } /* blue */
+      .chunk-g{ background:#bbf7d0; } /* green */
+      .chunk-x{ background:#e5e7eb; } /* grey */
+      .chunk:last-child{ border-right:none; }
+    </style>
+  `;
 
   return `
+    ${styles}
     <div style="margin-bottom:12px;">
       <div class="small" style="margin-bottom:6px;">
-        Stage 1: <strong>${s1}</strong> · Stage 2: <strong>${s2}</strong> · Stage 3: <strong>${s3}</strong>
+        Stage 1: <span class="stage1Txt">${s1}</span> ·
+        Stage 2: <span class="stage2Txt">${s2}</span> ·
+        Stage 3: <span class="stage3Txt">${s3}</span>
       </div>
-      <div style="height:14px; border:1px solid var(--border); border-radius:999px; overflow:hidden; background:#f9fafb;">
-        <div style="height:100%; width:${w1}%; background:#fde68a; display:inline-block;"></div>
-        <div style="height:100%; width:${w2}%; background:#bfdbfe; display:inline-block;"></div>
-        <div style="height:100%; width:${w3}%; background:#bbf7d0; display:inline-block;"></div>
+
+      <div class="chunkWrap" title="Total chunks: ${maxChunks}. Filled: ${filled}. Grey: ${grey}">
+        ${chunks}
       </div>
-      <div class="small" style="margin-top:6px;">Total cards: <strong>${total}</strong></div>
+
+      <div class="small" style="margin-top:6px;">
+        Total cards: <strong>${total}</strong> · Total progress chunks: <strong>${maxChunks}</strong>
+      </div>
     </div>
   `;
 }
