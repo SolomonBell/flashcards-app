@@ -1,39 +1,61 @@
-import { escapeHtml, sampleN, shuffle, pickLeastRecentlySeen, markSeen, STAGE3_INJECTION_CHANCE } from "../utils.js";
-import { renderStage1 } from "./stage1.js";
+import {
+  escapeHtml,
+  sampleN,
+  shuffle,
+  pickLeastRecentlySeen,
+  markSeen,
+  STAGE3_INJECTION_CHANCE
+} from "../utils.js";
+
+import { renderLearn } from "./learn.js";
 import { renderRecall } from "./recall.js";
 
 export function buildMCOptions(currentCard, allCards) {
-  const correct = { text: escapeHtml(currentCard.back), isCorrect: true };
+  const correct = {
+    text: escapeHtml(currentCard.back),
+    isCorrect: true
+  };
 
   const others = allCards
     .filter(c => c.id !== currentCard.id)
-    .map(c => ({ text: escapeHtml(c.back), isCorrect: false }));
+    .map(c => ({
+      text: escapeHtml(c.back),
+      isCorrect: false
+    }));
 
   const wrongs = sampleN(others, Math.min(3, others.length));
+
   while (wrongs.length < 3) {
-    wrongs.push({ text: "(Add more cards for better choices)", isCorrect: false });
+    wrongs.push({
+      text: "(Add more cards for better choices)",
+      isCorrect: false
+    });
   }
 
   return shuffle([correct, ...wrongs]);
 }
 
 function pickNextCard(cards) {
-  const stage1 = cards.filter(c => c.stage === 1);
-  const stage2 = cards.filter(c => c.stage === 2);
-  const stage3 = cards.filter(c => c.stage === 3);
+  const learn = cards.filter(c => c.stage === 1);
+  const recall = cards.filter(c => c.stage === 2);
+  const memorized = cards.filter(c => c.stage === 3);
 
-  if (stage1.length === 0 && stage2.length === 0) {
-    return stage3.length ? pickLeastRecentlySeen(stage3) : null;
+  if (learn.length === 0 && recall.length === 0) {
+    return memorized.length
+      ? pickLeastRecentlySeen(memorized)
+      : null;
   }
 
-  if (stage3.length > 0 && Math.random() < STAGE3_INJECTION_CHANCE) {
-    return pickLeastRecentlySeen(stage3);
+  if (memorized.length > 0 && Math.random() < STAGE3_INJECTION_CHANCE) {
+    return pickLeastRecentlySeen(memorized);
   }
 
-  if (stage1.length) return pickLeastRecentlySeen(stage1);
-  if (stage2.length) return pickLeastRecentlySeen(stage2);
+  if (learn.length) return pickLeastRecentlySeen(learn);
+  if (recall.length) return pickLeastRecentlySeen(recall);
 
-  return stage3.length ? pickLeastRecentlySeen(stage3) : null;
+  return memorized.length
+    ? pickLeastRecentlySeen(memorized)
+    : null;
 }
 
 export function renderStudyScreen(appEl, state, deps) {
@@ -43,36 +65,35 @@ export function renderStudyScreen(appEl, state, deps) {
     appEl.innerHTML = `
       <section class="card">
         ${deps.renderProgressBar(state)}
-        <h2 style="margin:12px 0 8px;">No cards available</h2>
-        <p class="help">Add some valid cards (Front + Back) to study.</p>
+        <h2>No cards available</h2>
         <div class="btns">
           <button class="danger" id="backToCreate">Back to Create</button>
         </div>
       </section>
     `;
+
     appEl.querySelector("#backToCreate").addEventListener("click", () => {
       deps.setScreen("create");
       deps.save();
       deps.renderAll();
     });
+
     return;
   }
 
-  // mark seen
-  const inState = state.cards.find(x => x.id === current.id) ?? current;
-  markSeen(inState);
+  const card = state.cards.find(c => c.id === current.id);
+  markSeen(card);
   deps.save();
 
-  // Ensure safe HTML in display fields
-  const safeCurrent = {
-    ...inState,
-    front: escapeHtml(inState.front),
-    back: escapeHtml(inState.back),
+  const safeCard = {
+    ...card,
+    front: escapeHtml(card.front),
+    back: escapeHtml(card.back),
   };
 
-  if (safeCurrent.stage === 1) {
-    renderStage1(appEl, state, safeCurrent, deps);
+  if (safeCard.stage === 1) {
+    renderLearn(appEl, state, safeCard, deps);
   } else {
-    renderRecall(appEl, state, safeCurrent, deps);
+    renderRecall(appEl, state, safeCard, deps);
   }
 }

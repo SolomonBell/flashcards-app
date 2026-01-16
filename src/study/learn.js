@@ -1,24 +1,31 @@
 import { buildMCOptions } from "./study.js";
 
-export function renderStage1(appEl, state, current, { renderProgressBar, save, setScreen, renderAll, feedback }) {
-  const counts = renderProgressBar(state);
+export function renderLearn(appEl, state, current, deps) {
+  const progress = deps.renderProgressBar(state);
   const options = buildMCOptions(current, state.cards);
 
   appEl.innerHTML = `
     <section class="card">
-      ${counts}
+      ${progress}
 
       <div style="display:flex; gap:10px; align-items: baseline; margin-top:12px;">
-        <h2 style="margin:0;">Stage 1</h2>
+        <h2 style="margin:0;">Learn</h2>
         <span class="small">(Multiple choice)</span>
       </div>
 
-      <p class="help" style="margin-top:10px;"><strong>Front:</strong> ${current.front}</p>
-      <p class="help" style="margin-top:-6px;">Choose the correct definition:</p>
+      <p class="help" style="margin-top:10px;">
+        <strong>Front:</strong> ${current.front}
+      </p>
+
+      <p class="help" style="margin-top:-6px;">
+        Choose the correct definition:
+      </p>
 
       <div style="display:grid; gap:10px; margin-top:10px;">
         ${options.map((opt, i) => `
-          <button class="mcOpt" data-idx="${i}">${opt.text}</button>
+          <button class="mcOpt" data-idx="${i}">
+            ${opt.text}
+          </button>
         `).join("")}
       </div>
 
@@ -29,9 +36,9 @@ export function renderStage1(appEl, state, current, { renderProgressBar, save, s
   `;
 
   appEl.querySelector("#backToCreate").addEventListener("click", () => {
-    setScreen("create");
-    save();
-    renderAll();
+    deps.setScreen("create");
+    deps.save();
+    deps.renderAll();
   });
 
   appEl.querySelectorAll(".mcOpt").forEach(btn => {
@@ -42,10 +49,14 @@ export function renderStage1(appEl, state, current, { renderProgressBar, save, s
       const c = state.cards.find(x => x.id === current.id);
       if (!c) return;
 
-      if (choice.isCorrect) c.stage = 2; // pass -> stage 2
-      save();
+      if (choice.isCorrect) {
+        // Pass Learn → Stage 2
+        c.stage = 2;
+      }
+      // Fail stays in Learn (stage 1)
 
-      feedback({
+      deps.save();
+      deps.feedback({
         correct: Boolean(choice.isCorrect),
         current,
         userAnswer: "(multiple choice)"
