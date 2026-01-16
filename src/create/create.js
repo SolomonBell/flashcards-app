@@ -124,10 +124,14 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
     const capped = Math.min(desired, 500);
 
     if (capped < current) {
+      const removed = current - capped;
+      const noun = removed === 1 ? "card" : "cards";
+    
       const ok = confirm(
-        `This will remove ${current - capped} card(s) from the bottom of the list. Continue?`
+        `This will remove ${removed} ${noun} from the bottom of the list. Continue?`
       );
       if (!ok) return;
+    
 
       state.cards = state.cards.slice(0, capped);
       if (state.cards.length === 0) state.cards.push(blankCard());
