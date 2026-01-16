@@ -32,15 +32,13 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
 
   appEl.innerHTML = `
     <section class="card">
-      <div class="deckTop">
-        <h2 style="margin:0;">Create your deck</h2>
-        <div class="btns" style="margin-top:0;">
-          <button class="danger" id="resetAll">Reset</button>
-        </div>
-      </div>
+      <!-- Title -->
+      <h2 style="margin:0; text-align:center;">Create Your Deck</h2>
 
-      <div class="deckStats" style="margin-top:10px;">
+      <!-- Total Cards + Reset row -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
         <div>Total Cards: <strong>${totalCount}</strong></div>
+        <button class="danger" id="resetAll">Reset</button>
       </div>
 
       <div id="cardsList" style="margin-top:12px;"></div>
