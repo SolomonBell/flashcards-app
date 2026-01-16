@@ -44,14 +44,15 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
       </div>
 
       <div class="btns" style="margin-top:12px;">
-        <button class="primary" id="startStudy" ${validCount < 1 ? "disabled" : ""}>Start studying</button>
+        <button class="primary" id="startStudy" ${validCount < 1 ? "disabled" : ""}>Start Studying</button>
+      </div>
+
+      <!-- Add Card button ABOVE the list, aligned far right -->
+      <div class="btns" style="margin-top:12px; justify-content:flex-end;">
+        <button class="primary" id="addCardTop">Add Card</button>
       </div>
 
       <div id="cardsList"></div>
-
-      <div class="btns" style="margin-top:14px; justify-content:flex-end;">
-        <button class="primary" id="addCardBottom">Add card</button>
-      </div>
     </section>
   `;
 
@@ -80,20 +81,24 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
     renderAll();
   });
 
-  function addCardAndScroll() {
+  function addCardAndScrollToTop() {
     const newC = blankCard();
-    state.cards.push(newC);
+
+    // NEW: add from the TOP
+    state.cards.unshift(newC);
+
     save();
     renderAll();
 
     requestAnimationFrame(() => {
       const el = document.querySelector(`.cardRow[data-id="${newC.id}"]`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      el?.querySelector('input[data-field="front"]')?.focus();
+      // focus the front textarea
+      el?.querySelector('textarea[data-field="front"]')?.focus();
     });
   }
 
-  appEl.querySelector("#addCardBottom").addEventListener("click", addCardAndScroll);
+  appEl.querySelector("#addCardTop").addEventListener("click", addCardAndScrollToTop);
 
   // Render list + wire handlers
   const listWrap = appEl.querySelector("#cardsList");

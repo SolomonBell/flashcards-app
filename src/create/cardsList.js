@@ -12,11 +12,12 @@ export function renderCardsList(state) {
 
       <div class="cardRowGrid">
         <div>
-          <label class="label">Front</label>
-          <input type="text" data-field="front" value="${escapeHtml(c.front)}" placeholder="Term / question" />
+          <label class="label" style="display:block; text-align:center;">Front</label>
+          <textarea data-field="front" placeholder="Term / question">${escapeHtml(c.front)}</textarea>
         </div>
+
         <div>
-          <label class="label">Back</label>
+          <label class="label" style="display:block; text-align:center;">Back</label>
           <textarea data-field="back" placeholder="Definition / answer">${escapeHtml(c.back)}</textarea>
         </div>
       </div>
@@ -26,7 +27,7 @@ export function renderCardsList(state) {
 
 export function wireCardsListHandlers(rootEl, state, { save, render, blankCard }) {
   // Auto-save edits
-  rootEl.querySelectorAll("input[data-field], textarea[data-field]").forEach(el => {
+  rootEl.querySelectorAll("textarea[data-field]").forEach(el => {
     el.addEventListener("input", (e) => {
       const row = e.target.closest(".cardRow");
       const id = row.getAttribute("data-id");
