@@ -1,10 +1,6 @@
 export function renderProgressBar(state) {
   const { s1, s2, s3, total } = countsByStage(state.cards);
 
-  // Chunk progress logic:
-  // Yellow chunk = passed Learn (stage >= 2)
-  // Blue chunk   = passed Stage 2 (stage === 3)
-  // Green chunk  = passed Stage 3 check at least once (stage3Mastered)
   const yellow = state.cards.filter(c => c.stage >= 2).length;
   const blue = state.cards.filter(c => c.stage === 3).length;
   const green = state.cards.filter(c => c.stage === 3 && c.stage3Mastered).length;
@@ -13,20 +9,16 @@ export function renderProgressBar(state) {
   const filled = yellow + blue + green;
   const grey = Math.max(0, maxChunks - filled);
 
-  // Guard against divide-by-zero (e.g., no cards)
   const denom = maxChunks > 0 ? maxChunks : 1;
 
-  // Segment widths (%)
   const yellowW = (yellow / denom) * 100;
   const blueW = (blue / denom) * 100;
   const greenW = (green / denom) * 100;
 
-  // Centers (% from left) for labels to sit under each colored segment
   const yellowCenter = yellowW / 2;
   const blueCenter = yellowW + blueW / 2;
   const greenCenter = yellowW + blueW + greenW / 2;
 
-  // Ordered chunks: yellow then blue then green then grey
   const chunks =
     Array.from({ length: yellow }, () => `<span class="chunk chunk-y"></span>`).join("") +
     Array.from({ length: blue }, () => `<span class="chunk chunk-b"></span>`).join("") +
@@ -35,70 +27,79 @@ export function renderProgressBar(state) {
 
   const styles = `
     <style>
-      .stage1Txt{ color:#fde68a; font-weight:800; }
-      .stage2Txt{ color:#bfdbfe; font-weight:800; }
-      .stage3Txt{ color:#bbf7d0; font-weight:800; }
+      /* === LABEL COLORS + BLACK OUTLINE === */
+      .stage1Txt{ color:#fde68a; }
+      .stage2Txt{ color:#bfdbfe; }
+      .stage3Txt{ color:#bbf7d0; }
 
-      /* Light colors need contrast on white */
-      .stage1Txt, .stage2Txt, .stage3Txt {
-        text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+      .stage1Txt,
+      .stage2Txt,
+      .stage3Txt{
+        font-weight:800;
+        -webkit-text-stroke: 0.6px #000;
+        text-shadow:
+          0 0 1px #000,
+          0 1px 0 #000;
       }
 
+      /* === BAR CONTAINER === */
       .chunkWrap{
         display:flex;
         width:100%;
         height:14px;
-        border:1px solid var(--border);
+        border:2px solid #000;      /* black outline around whole bar */
         border-radius:999px;
         overflow:hidden;
         background:#f9fafb;
       }
+
+      /* === INDIVIDUAL CHUNKS === */
       .chunk{
-        flex: 1 1 0;              /* makes it one continuous full-width bar */
+        flex:1 1 0;
         height:100%;
-        border-right:1px solid rgba(17,24,39,0.08);
+        border-right:1px solid #000; /* black dividers */
       }
-      .chunk:last-child{ border-right:none; }
+      .chunk:last-child{
+        border-right:none;
+      }
+
       .chunk-y{ background:#fde68a; }
       .chunk-b{ background:#bfdbfe; }
       .chunk-g{ background:#bbf7d0; }
       .chunk-x{ background:#e5e7eb; }
 
+      /* === LABEL POSITIONING === */
       .labelsUnderBar{
         position: relative;
         height: 18px;
         margin-top: 6px;
         font-size: 12px;
-        color: var(--muted);
+        user-select: none;
       }
+
       .lbl{
         position:absolute;
         top:0;
         transform: translateX(-50%);
         white-space: nowrap;
-        user-select: none;
       }
     </style>
   `;
 
-  // If a segment is 0-width, centering would place labels on boundaries and can overlap.
-  // We'll still render them (matches your request), but only if there are cards total.
-  const showLabels = total > 0;
-
   return `
     ${styles}
     <div style="margin-bottom:12px;">
-      <div class="chunkWrap" title="Total chunks: ${maxChunks}. Filled: ${filled}. Grey: ${grey}">
+      <div class="chunkWrap">
         ${chunks}
       </div>
 
       <div class="labelsUnderBar">
         ${
-          showLabels
+          total > 0
             ? `
-              <div class="lbl stage1Txt" style="left:${yellowCenter}%;"><span>Stage 1: ${s1}</span></div>
-              <div class="lbl stage2Txt" style="left:${blueCenter}%;"><span>Stage 2: ${s2}</span></div>
-              <div class="lbl stage3Txt" style="left:${greenCenter}%;"><span>Stage 3: ${s3}</span></div>
+              <div class="lbl stage1Txt" style="left:${yellowCenter}%;">Stage 1: ${s1}</div>
+              <div class="lbl stage2Txt" style="left:${blueCenter}%;">Stage 2: ${s2}</div>
+              <div class="lbl stage3Txt" style="left:${greenCenter}%;">Stage 3: ${s3}</div>
             `
             : ``
         }
