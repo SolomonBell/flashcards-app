@@ -2,13 +2,12 @@
 
 const STORAGE_KEY = "flashcards_app_v1";
 
-// How often to "inject" a Stage 3 (memorized) card during normal study.
-// 0.20 = ~20% of prompts become Stage 3 if any exist.
+// How often to "inject" a Stage 3 card during normal study.
 const STAGE3_INJECTION_CHANCE = 0.20;
 
 let state = loadState() ?? {
   screen: "create", // "create" | "study"
-  cards: [],        // {id, front, back, stage, createdAt, lastSeenAt}
+  cards: [],        // {id, front, back, stage, createdAt, lastSeenAt, stage3Mastered}
 };
 
 const appEl = document.getElementById("app");
@@ -34,7 +33,19 @@ function saveState() {
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+
+    // Lightweight migration: ensure new fields exist
+    if (parsed?.cards?.length) {
+      parsed.cards = parsed.cards.map(c => ({
+        ...c,
+        stage: [1, 2, 3].includes(c.stage) ? c.stage : 1,
+        stage3Mastered: Boolean(c.stage3Mastered), // default false if missing
+      }));
+    }
+
+    return parsed;
   } catch {
     return null;
   }
@@ -84,6 +95,7 @@ function blankCard() {
     stage: 1,
     createdAt: Date.now(),
     lastSeenAt: null,
+    stage3Mastered: false, // NEW: true only after a correct Stage 3 check
   };
 }
 
@@ -115,7 +127,7 @@ function pickLeastRecentlySeen(list) {
   return best;
 }
 
-// Stage 3 should appear randomly throughout study, and forever if all are Stage 3.
+// Stage 3 appears randomly throughout study; if all are Stage 3, keep showing them forever.
 function pickNextCard(cards) {
   const stage1 = cards.filter(c => c.stage === 1);
   const stage2 = cards.filter(c => c.stage === 2);
@@ -224,11 +236,13 @@ function renderCreateScreen() {
       if (!ok) return;
     }
 
+    // Keep only valid cards; trim ends; keep progress fields
     state.cards = valid.map(c => ({
       ...c,
       front: c.front.trim(),
       back: c.back.trim(),
       stage: [1, 2, 3].includes(c.stage) ? c.stage : 1,
+      stage3Mastered: Boolean(c.stage3Mastered),
     }));
 
     state.screen = "study";
@@ -362,8 +376,6 @@ function renderStage1(current) {
       <div class="btns" style="margin-top:14px;">
         <button class="danger" id="backToCreate">Back to Create</button>
       </div>
-
-      <p class="small" style="margin-top:10px;">Stage 1 options re-randomize each time.</p>
     </section>
   `;
 
@@ -378,12 +390,16 @@ function renderStage1(current) {
       const i = Number(e.currentTarget.getAttribute("data-idx"));
       const choice = options[i];
 
+      const c = state.cards.find(x => x.id === current.id);
+      if (!c) return;
+
       if (choice.isCorrect) {
-        const c = state.cards.find(x => x.id === current.id);
-        if (c) c.stage = 2;
+        // Stage 1 pass -> Stage 2 (earns 1 yellow chunk)
+        c.stage = 2;
         saveState();
         renderFeedback({ correct: true, current, userAnswer: "(multiple choice)" });
       } else {
+        // Stage 1 fail -> stays Stage 1
         saveState();
         renderFeedback({ correct: false, current, userAnswer: "(multiple choice)" });
       }
@@ -415,10 +431,6 @@ function renderRecall(current) {
         <button class="primary" id="submitRecall">Submit</button>
         <button class="danger" id="backToCreate">Back to Create</button>
       </div>
-
-      <p class="small" style="margin-top:10px;">
-        Matching rule: case-insensitive; otherwise exact (leading/trailing spaces ignored).
-      </p>
     </section>
   `;
 
@@ -445,11 +457,24 @@ function renderRecall(current) {
     if (!c) return;
 
     if (c.stage === 2) {
-      if (correct) c.stage = 3;
-      else c.stage = 1;
+      if (correct) {
+        // Stage 2 pass -> Stage 3 (earns 1 blue chunk)
+        c.stage = 3;
+        c.stage3Mastered = false; // green not earned until a Stage 3 correct
+      } else {
+        // Stage 2 fail -> Stage 1 (loses yellow/blue chunks)
+        c.stage = 1;
+        c.stage3Mastered = false;
+      }
     } else if (c.stage === 3) {
-      if (correct) c.stage = 3;
-      else c.stage = 2;
+      if (correct) {
+        // Stage 3 correct earns the green chunk (Stage 3 completion)
+        c.stage3Mastered = true;
+      } else {
+        // Stage 3 fail -> Stage 2 (loses green only)
+        c.stage = 2;
+        c.stage3Mastered = false;
+      }
     }
 
     saveState();
@@ -492,55 +517,58 @@ function renderFeedback({ correct, current, userAnswer }) {
   });
 }
 
-/* ---------------- NEW PROGRESS BAR (chunk-based) ---------------- */
+/* ---------------- Progress Bar (12 chunks for 4 cards) ----------------
+   - Start: all grey (0 progress)
+   - Passing Stage 1 -> earns 1 yellow chunk (card moves to stage 2)
+   - Passing Stage 2 -> earns 1 blue chunk (card moves to stage 3)
+   - Passing Stage 3 at least once -> earns 1 green chunk (stage3Mastered = true)
+   Ordered: yellow then blue then green then grey
+----------------------------------------------------------------------- */
 function renderProgressBar({ s1, s2, s3, total }) {
-  // Chunk logic:
-  // Yellow chunks: every card has Stage 1 done -> total
-  // Blue chunks: cards that have reached Stage 2 or 3 -> s2 + s3
-  // Green chunks: cards in Stage 3 -> s3
-  const yellow = total;
-  const blue = s2 + s3;
-  const green = s3;
+  // Chunk counts based on CURRENT progress state (not "what stage you're currently in at minimum").
+  // Yellow = cards currently in Stage 2 or 3  (they passed Stage 1)
+  // Blue   = cards currently in Stage 3      (they passed Stage 2)
+  // Green  = cards in Stage 3 with stage3Mastered true (they passed Stage 3 check at least once)
+  const yellow = state.cards.filter(c => c.stage >= 2).length;
+  const blue = state.cards.filter(c => c.stage === 3).length;
+  const green = state.cards.filter(c => c.stage === 3 && c.stage3Mastered).length;
 
   const maxChunks = total * 3;
   const filled = yellow + blue + green;
   const grey = Math.max(0, maxChunks - filled);
 
-  // Build HTML chunks (ordered: all yellow then blue then green then grey)
-  const chunks = []
-    .concat(Array.from({ length: yellow }, () => `<span class="chunk chunk-y"></span>`))
-    .concat(Array.from({ length: blue }, () => `<span class="chunk chunk-b"></span>`))
-    .concat(Array.from({ length: green }, () => `<span class="chunk chunk-g"></span>`))
-    .concat(Array.from({ length: grey }, () => `<span class="chunk chunk-x"></span>`))
-    .join("");
+  const chunks =
+    Array.from({ length: yellow }, () => `<span class="chunk chunk-y"></span>`).join("") +
+    Array.from({ length: blue }, () => `<span class="chunk chunk-b"></span>`).join("") +
+    Array.from({ length: green }, () => `<span class="chunk chunk-g"></span>`).join("") +
+    Array.from({ length: grey }, () => `<span class="chunk chunk-x"></span>`).join("");
 
-  // Inline styles so you don't have to touch CSS right now
+  // Inline CSS so you don't have to edit style.css
   const styles = `
     <style>
-      .stage1Txt{ color:#b45309; font-weight:600; }   /* yellow-ish */
-      .stage2Txt{ color:#1d4ed8; font-weight:600; }   /* blue */
-      .stage3Txt{ color:#15803d; font-weight:600; }   /* green */
+      .stage1Txt{ color:#b45309; font-weight:700; } /* yellow-ish */
+      .stage2Txt{ color:#1d4ed8; font-weight:700; } /* blue */
+      .stage3Txt{ color:#15803d; font-weight:700; } /* green */
 
       .chunkWrap{
         display:flex;
-        flex-wrap:nowrap;
-        overflow:hidden;
+        width:100%;
+        height:14px;
         border:1px solid var(--border);
         border-radius:999px;
+        overflow:hidden;
         background:#f9fafb;
-        height:14px;
       }
       .chunk{
-        display:inline-block;
+        flex: 1 1 0;              /* makes it one continuous full-width bar */
         height:100%;
-        width:10px;               /* chunk width */
         border-right:1px solid rgba(17,24,39,0.08);
       }
+      .chunk:last-child{ border-right:none; }
       .chunk-y{ background:#fde68a; } /* yellow */
       .chunk-b{ background:#bfdbfe; } /* blue */
       .chunk-g{ background:#bbf7d0; } /* green */
       .chunk-x{ background:#e5e7eb; } /* grey */
-      .chunk:last-child{ border-right:none; }
     </style>
   `;
 
@@ -558,7 +586,10 @@ function renderProgressBar({ s1, s2, s3, total }) {
       </div>
 
       <div class="small" style="margin-top:6px;">
-        Total cards: <strong>${total}</strong> · Total progress chunks: <strong>${maxChunks}</strong>
+        Progress chunks: <span class="stage1Txt">${yellow}</span>Y +
+        <span class="stage2Txt">${blue}</span>B +
+        <span class="stage3Txt">${green}</span>G =
+        <strong>${filled}</strong> / ${maxChunks}
       </div>
     </div>
   `;
