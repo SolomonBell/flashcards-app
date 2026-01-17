@@ -40,7 +40,7 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
           id="totalCardsBtn"
           type="button"
           style="
-            border:2px solid #555;        /* lighter outline */
+            border:2px solid #555;
             border-radius:12px;
             padding:8px 12px;
             background:#fff;
@@ -76,7 +76,7 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
   appEl.querySelector("#startStudy").addEventListener("click", () => {
     const valid = getValidCards(state);
     if (valid.length < 1) {
-      alert("Please fill in at least 1 card (Front and Back).");
+      alert("Please fill in at least 1 card (Question and Answer).");
       return;
     }
 
@@ -93,29 +93,31 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
     renderAll();
   });
 
-  function addCardAndScrollToTop() {
+  // ✅ Add Card now adds to the BOTTOM
+  function addCardAndScrollToBottom() {
     const newC = blankCard();
-    state.cards.unshift(newC);
+    state.cards.push(newC);
     save();
     renderAll();
 
     requestAnimationFrame(() => {
       const el = document.querySelector(`.cardRow[data-id="${newC.id}"]`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "end" });
       el?.querySelector('textarea[data-field="front"]')?.focus();
     });
   }
 
-  appEl.querySelector("#addCardBottom").addEventListener("click", addCardAndScrollToTop);
+  appEl.querySelector("#addCardBottom").addEventListener("click", addCardAndScrollToBottom);
 
-  // Click Total Cards box to set deck size
+  // ✅ Total Cards adjusts size:
+  // - increasing: add blanks to bottom (no deletion)
+  // - decreasing: delete from bottom up
   appEl.querySelector("#totalCardsBtn").addEventListener("click", () => {
     const current = state.cards.length;
     const raw = prompt("Enter Total Number of Cards:", String(current));
     if (raw === null) return;
 
     const desired = Number.parseInt(raw, 10);
-
     if (!Number.isFinite(desired) || desired < 1) {
       alert("Please enter a whole number of 1 or more.");
       return;
@@ -126,21 +128,23 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
     if (capped < current) {
       const removed = current - capped;
       const noun = removed === 1 ? "card" : "cards";
-    
+
       const ok = confirm(
-        `This will remove ${removed} ${noun} from the bottom of the list.`
+        `This will remove ${removed} ${noun} from the bottom of the list. Continue?`
       );
       if (!ok) return;
-    
 
+      // keep first N cards => removes from bottom
       state.cards = state.cards.slice(0, capped);
       if (state.cards.length === 0) state.cards.push(blankCard());
     } else if (capped > current) {
       const toAdd = capped - current;
       const newCards = Array.from({ length: toAdd }, () => blankCard());
-      state.cards = newCards.concat(state.cards); // add to top
+
+      // add to bottom (no deletion)
+      state.cards = state.cards.concat(newCards);
     } else {
-      return;
+      return; // no change
     }
 
     save();
