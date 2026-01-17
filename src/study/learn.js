@@ -8,17 +8,14 @@ export function renderLearn(appEl, state, current, deps) {
     <section class="card">
       ${progress}
 
-      <div style="display:flex; gap:10px; align-items: baseline; margin-top:12px;">
-        <h2 style="margin:0;">Learn</h2>
-        <span class="small">(Multiple choice)</span>
-      </div>
+      <h2 style="margin:12px 0 6px;">Learn</h2>
 
       <p class="help" style="margin-top:10px;">
         <strong>Front:</strong> ${current.front}
       </p>
 
       <p class="help" style="margin-top:-6px;">
-        Choose the correct definition:
+        Choose the correct answer:
       </p>
 
       <div style="display:grid; gap:10px; margin-top:10px;">
@@ -45,20 +42,20 @@ export function renderLearn(appEl, state, current, deps) {
     btn.addEventListener("click", (e) => {
       const i = Number(e.currentTarget.getAttribute("data-idx"));
       const choice = options[i];
-  
+
       const c = state.cards.find(x => x.id === current.id);
       if (!c) return;
-  
+
+      // Learn stage: correct → Stage 2, incorrect → stay Stage 1
       if (choice.isCorrect) {
         c.stage = 2;
       }
-  
+
       deps.save();
       deps.feedback({
         correct: Boolean(choice.isCorrect),
         current,
-        userAnswer: choice.text,
-        label: "Answer"
+        userAnswer: choice.text
       });
     });
   });
