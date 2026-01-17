@@ -45,21 +45,20 @@ export function renderLearn(appEl, state, current, deps) {
     btn.addEventListener("click", (e) => {
       const i = Number(e.currentTarget.getAttribute("data-idx"));
       const choice = options[i];
-
+  
       const c = state.cards.find(x => x.id === current.id);
       if (!c) return;
-
+  
       if (choice.isCorrect) {
-        // Pass Learn → Stage 2
         c.stage = 2;
       }
-      // Fail stays in Learn (stage 1)
-
+  
       deps.save();
       deps.feedback({
         correct: Boolean(choice.isCorrect),
         current,
-        userAnswer: "(multiple choice)"
+        userAnswer: choice.text,
+        label: "Answer"
       });
     });
   });
