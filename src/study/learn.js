@@ -45,87 +45,76 @@ export function renderLearn(appEl, state, current, deps) {
     deps.renderAll();
   });
 
+  const mcWrap = appEl.querySelector("#mcWrap");
   const buttons = Array.from(appEl.querySelectorAll(".mcOpt"));
 
-  // Two-step state machine for this card:
-  // step = "answer" -> first click shows feedback
-  // step = "advance" -> second click moves to next card
+  // step: "answer" -> waiting for first click
+  // step: "revealing" -> showing correct option after delay
+  // step: "ready" -> next click advances
   let step = "answer";
-  let revealTimerDone = false;
 
-  function goNext() {
-    deps.renderAll();
+  function setAllButtonsUnclickableLook() {
+    // Makes it feel like you already "answered", but still clickable for next-step
+    buttons.forEach(b => {
+      b.style.opacity = "0.95";
+    });
   }
+
+  function revealCorrect() {
+    buttons.forEach((b, i) => {
+      if (options[i].isCorrect) {
+        b.style.background = "#bbf7d0"; // light green
+      }
+    });
+  }
+
+  // Second click: anywhere inside mcWrap advances, but only when step === "ready"
+  mcWrap.addEventListener("click", (e) => {
+    if (step !== "ready") return;
+
+    // Only advance if they clicked on a button (keeps it intuitive)
+    const btn = e.target.closest(".mcOpt");
+    if (!btn) return;
+
+    deps.renderAll();
+  });
 
   buttons.forEach((btn) => {
     btn.addEventListener("click", (e) => {
-      const idx = Number(e.currentTarget.getAttribute("data-idx"));
+      // If already ready, do nothing here — mcWrap handles advancing
+      if (step !== "answer") return;
+
+      step = "revealing";
+
+      const idx = Number(btn.getAttribute("data-idx"));
       const choice = options[idx];
 
-      // SECOND CLICK: advance (only after reveal completes)
-      if (step === "advance") {
-        goNext();
-        return;
-      }
-
-      // FIRST CLICK: show feedback
-      step = "advance";
-
-      // Disable buttons so they don't look clickable for choosing again
-      // But they still receive click events; that's okay because we use "step".
-      buttons.forEach(b => {
-        b.disabled = true;
-        b.style.cursor = "pointer"; // still feels like "tap to continue"
-      });
-
-      // Immediate color on chosen option
-      const selectedBtn = e.currentTarget;
+      // Immediate color on the clicked option
       if (choice.isCorrect) {
-        selectedBtn.style.background = "#bbf7d0"; // light green
+        btn.style.background = "#bbf7d0"; // light green
       } else {
-        selectedBtn.style.background = "#fecaca"; // light red
+        btn.style.background = "#fecaca"; // light red
       }
 
-      // Apply stage logic immediately (no waiting)
+      setAllButtonsUnclickableLook();
+
+      // Apply Learn-stage logic immediately
       const c = state.cards.find(x => x.id === current.id);
       if (!c) return;
 
       if (choice.isCorrect) {
-        c.stage = 2; // correct in Learn -> Stage 2
+        c.stage = 2; // correct -> Stage 2
       }
-      // wrong stays stage 1
+      // wrong stays Stage 1
       deps.save();
 
-      // After a brief delay, reveal the correct answer in green (especially useful when wrong)
+      // After short delay, show the correct one green (especially useful when wrong)
       setTimeout(() => {
-        buttons.forEach((b, i) => {
-          if (options[i].isCorrect) {
-            b.style.background = "#bbf7d0"; // light green
-          }
-        });
-
-        // Now the user can click again to continue (step already set)
-        revealTimerDone = true;
+        revealCorrect();
+        step = "ready";
+        // Optional: subtle hint by changing cursor
+        buttons.forEach(b => (b.style.cursor = "pointer"));
       }, 300);
     });
-  });
-
-  // Extra safety: if user clicks extremely fast (double click),
-  // the second click might happen before the reveal shows.
-  // We ensure they only advance after reveal delay completes.
-  function guardAdvanceClicks() {
-    if (step !== "advance") return;
-    if (!revealTimerDone) return;
-  }
-
-  // Patch: override advance behavior to wait for reveal completion.
-  buttons.forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      if (step === "advance" && !revealTimerDone) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-    }, true);
   });
 }
