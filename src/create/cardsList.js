@@ -12,12 +12,12 @@ export function renderCardsList(state) {
 
       <div class="cardRowGrid">
         <div>
-          <label class="label" style="display:block; text-align:center;">Front</label>
+          <label class="label" style="display:block; text-align:center;">Question</label>
           <textarea data-field="front" placeholder="Question">${escapeHtml(c.front)}</textarea>
         </div>
 
         <div>
-          <label class="label" style="display:block; text-align:center;">Back</label>
+          <label class="label" style="display:block; text-align:center;">Answer</label>
           <textarea data-field="back" placeholder="Answer">${escapeHtml(c.back)}</textarea>
         </div>
       </div>
@@ -26,7 +26,6 @@ export function renderCardsList(state) {
 }
 
 export function wireCardsListHandlers(rootEl, state, { save, render, blankCard }) {
-  // Auto-save edits
   rootEl.querySelectorAll("textarea[data-field]").forEach(el => {
     el.addEventListener("input", (e) => {
       const row = e.target.closest(".cardRow");
@@ -40,14 +39,10 @@ export function wireCardsListHandlers(rootEl, state, { save, render, blankCard }
     });
   });
 
-  // Delete card
   rootEl.querySelectorAll('button[data-action="delete"]').forEach(btn => {
     btn.addEventListener("click", (e) => {
       const row = e.target.closest(".cardRow");
       const id = row.getAttribute("data-id");
-      const card = state.cards.find(x => x.id === id);
-      if (!card) return;
-
       if (!confirm("Delete this card?")) return;
       state.cards = state.cards.filter(x => x.id !== id);
       if (state.cards.length === 0) state.cards.push(blankCard());
