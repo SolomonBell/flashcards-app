@@ -7,10 +7,8 @@ export function renderRecall(appEl, state, current, deps) {
     <section class="card">
       ${progress}
 
-      <!-- Centered title -->
       <h2 style="margin:12px 0 10px; text-align:center;">Recall</h2>
 
-      <!-- Front value, larger and without label -->
       <div
         style="
           font-size:1.6rem;
@@ -50,11 +48,10 @@ export function renderRecall(appEl, state, current, deps) {
       return;
     }
 
-    const correctAnswer = current.back.trim();
+    const correctAnswer = (current.back ?? "").trim();
 
-    const normalize = s =>
-      s.toLowerCase().replace(/\s+/g, " ").trim();
-
+    // Case-insensitive, exact otherwise (allows "Hello" == "hello" but not "h ello")
+    const normalize = (s) => String(s).trim().toLowerCase();
     const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
 
     const c = state.cards.find(x => x.id === current.id);
@@ -62,13 +59,22 @@ export function renderRecall(appEl, state, current, deps) {
 
     if (c.stage === 2) {
       if (isCorrect) {
+        // Stage 2 pass -> Stage 3 (blue earned); green not yet
         c.stage = 3;
+        c.stage3Mastered = false;
       } else {
+        // Stage 2 fail -> back to Learn; lose green
         c.stage = 1;
+        c.stage3Mastered = false;
       }
     } else if (c.stage === 3) {
-      if (!isCorrect) {
+      if (isCorrect) {
+        // ✅ This is what makes GREEN appear
+        c.stage3Mastered = true;
+      } else {
+        // Stage 3 fail -> drop to Stage 2 and lose green
         c.stage = 2;
+        c.stage3Mastered = false;
       }
     }
 
