@@ -109,8 +109,14 @@ export function renderRecall(appEl, state, current, deps) {
         <textarea
           id="recallInput"
           placeholder="Answer here..."
-          style="width:100%; min-height:90px; margin-top:8px; background:${inputBg};"
-          ${step === "result" ? "disabled" : ""}
+          style="
+            width:100%;
+            min-height:90px;
+            margin-top:8px;
+            background:${inputBg};
+            opacity:1;
+          "
+          ${step === "result" ? "readonly" : ""}
         ></textarea>
 
         ${resultBlock}
@@ -141,7 +147,7 @@ export function renderRecall(appEl, state, current, deps) {
     if (step === "answer") {
       appEl.querySelector("#submitRecall").addEventListener("click", submitAnswer);
 
-      // ✅ Enter = Submit (Shift+Enter still makes a newline)
+      // ✅ Enter = Submit (Shift+Enter still makes newline)
       inputEl.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
@@ -149,12 +155,15 @@ export function renderRecall(appEl, state, current, deps) {
         }
       });
 
-      // Auto-focus feels great here
       inputEl.focus();
     } else {
-      appEl.querySelector("#nextBtn").addEventListener("click", goNext);
+      const nextBtn = appEl.querySelector("#nextBtn");
+      nextBtn.addEventListener("click", goNext);
 
-      // ✅ Enter = Next on result screen
+      // ✅ Make Enter work immediately for "Next" by focusing it
+      nextBtn.focus();
+
+      // Optional: Enter triggers next even if focus changes
       document.addEventListener(
         "keydown",
         function onKeyDown(e) {
