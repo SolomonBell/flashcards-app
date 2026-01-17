@@ -25,7 +25,7 @@ export function renderLearn(appEl, state, current, deps) {
         Choose the correct answer:
       </p>
 
-      <div style="display:grid; gap:10px;">
+      <div id="mcWrap" style="display:grid; gap:10px;">
         ${options.map((opt, i) => `
           <button class="mcOpt" data-idx="${i}">
             ${opt.text}
@@ -45,22 +45,29 @@ export function renderLearn(appEl, state, current, deps) {
     deps.renderAll();
   });
 
-  let locked = false;
+  let resolved = false;
 
-  appEl.querySelectorAll(".mcOpt").forEach(btn => {
+  const buttons = Array.from(appEl.querySelectorAll(".mcOpt"));
+
+  buttons.forEach(btn => {
     btn.addEventListener("click", (e) => {
-      if (locked) return;
-      locked = true;
+      if (resolved) {
+        // After reveal, clicking anywhere advances
+        deps.renderAll();
+        return;
+      }
+
+      resolved = true;
 
       const i = Number(e.currentTarget.getAttribute("data-idx"));
       const choice = options[i];
 
-      // Disable all buttons to prevent double-clicks
-      const allBtns = Array.from(appEl.querySelectorAll(".mcOpt"));
-      allBtns.forEach(b => (b.disabled = true));
+      // Disable all buttons
+      buttons.forEach(b => (b.disabled = true));
 
-      // Light background feedback on the selected button
       const selectedBtn = e.currentTarget;
+
+      // Immediate feedback on selection
       if (choice.isCorrect) {
         selectedBtn.style.background = "#bbf7d0"; // light green
       } else {
@@ -70,28 +77,19 @@ export function renderLearn(appEl, state, current, deps) {
       const c = state.cards.find(x => x.id === current.id);
       if (!c) return;
 
-      // Stage transitions for Learn:
-      // correct -> Stage 2, incorrect -> stay Stage 1
+      // Learn stage logic
       if (choice.isCorrect) {
         c.stage = 2;
       }
 
       deps.save();
 
-      // Auto-advance on correct after a brief flash.
-      if (choice.isCorrect) {
-        setTimeout(() => {
-          deps.renderAll(); // goes to next card
-        }, 350);
-        return;
-      }
-
-      // If wrong: show feedback (after brief red flash) so they see the correct answer
+      // After delay, reveal the correct answer in green
       setTimeout(() => {
-        deps.feedback({
-          correct: false,
-          current,
-          userAnswer: choice.text
+        buttons.forEach((b, idx) => {
+          if (options[idx].isCorrect) {
+            b.style.background = "#bbf7d0"; // light green
+          }
         });
       }, 350);
     });
