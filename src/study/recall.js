@@ -59,35 +59,15 @@ export function renderRecall(appEl, state, current, deps) {
   function render() {
     const frontHtml = escapeHtml(current.front ?? "");
 
-    const resultBlock =
-      step === "result" && lastResult && !lastResult.isCorrect
-        ? `
-          <div style="margin-top:14px;">
-            <p class="help" style="text-align:center; margin:0 0 8px;">
-              <strong>Correct Answer</strong>
-            </p>
-            <div
-              class="card"
-              style="
-                border-radius:10px;
-                padding:12px;
-                background:#bbf7d0;
-              "
-            >
-              <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${escapeHtml(
-                lastResult.correctAnswer
-              )}</pre>
-            </div>
-          </div>
-        `
-        : "";
+    const showCorrect = step === "result" && lastResult && !lastResult.isCorrect;
 
-    const inputBg =
+    // Wrapper color (guaranteed visible)
+    const wrapperBg =
       step === "result" && lastResult
         ? lastResult.isCorrect
-          ? "#bbf7d0"
-          : "#fecaca"
-        : "";
+          ? "#bbf7d0" // green
+          : "#fecaca" // red
+        : "#ffffff"; // default
 
     appEl.innerHTML = `
       <section class="card">
@@ -106,20 +86,53 @@ export function renderRecall(appEl, state, current, deps) {
           ${frontHtml}
         </div>
 
-        <textarea
-          id="recallInput"
-          placeholder="Answer here..."
+        <!-- Colored wrapper so CSS can't override the feedback color -->
+        <div
+          id="answerWrap"
           style="
-            width:100%;
-            min-height:90px;
-            margin-top:8px;
-            background:${inputBg};
-            opacity:1;
+            background:${wrapperBg};
+            border-radius:12px;
+            padding:10px;
           "
-          ${step === "result" ? "readonly" : ""}
-        ></textarea>
+        >
+          <textarea
+            id="recallInput"
+            placeholder="Answer here..."
+            style="
+              width:100%;
+              min-height:90px;
+              background:transparent;
+              border:none;
+              outline:none;
+              resize:vertical;
+            "
+            ${step === "result" ? "readonly" : ""}
+          ></textarea>
+        </div>
 
-        ${resultBlock}
+        ${
+          showCorrect
+            ? `
+              <div style="margin-top:14px;">
+                <p class="help" style="text-align:center; margin:0 0 8px;">
+                  <strong>Correct Answer</strong>
+                </p>
+                <div
+                  class="card"
+                  style="
+                    border-radius:10px;
+                    padding:12px;
+                    background:#bbf7d0;
+                  "
+                >
+                  <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${escapeHtml(
+                    lastResult.correctAnswer
+                  )}</pre>
+                </div>
+              </div>
+            `
+            : ""
+        }
 
         <div class="btns" style="margin-top:16px;">
           ${
@@ -134,6 +147,7 @@ export function renderRecall(appEl, state, current, deps) {
 
     const inputEl = appEl.querySelector("#recallInput");
 
+    // Preserve what they typed after re-render
     if (lastResult?.userAnswer != null) {
       inputEl.value = lastResult.userAnswer;
     }
@@ -147,7 +161,7 @@ export function renderRecall(appEl, state, current, deps) {
     if (step === "answer") {
       appEl.querySelector("#submitRecall").addEventListener("click", submitAnswer);
 
-      // ✅ Enter = Submit (Shift+Enter still makes newline)
+      // Enter = Submit (Shift+Enter still newline)
       inputEl.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
@@ -160,10 +174,10 @@ export function renderRecall(appEl, state, current, deps) {
       const nextBtn = appEl.querySelector("#nextBtn");
       nextBtn.addEventListener("click", goNext);
 
-      // ✅ Make Enter work immediately for "Next" by focusing it
+      // Focus Next so Enter works naturally for "Next"
       nextBtn.focus();
 
-      // Optional: Enter triggers next even if focus changes
+      // Also allow Enter anywhere to go next (once)
       document.addEventListener(
         "keydown",
         function onKeyDown(e) {
