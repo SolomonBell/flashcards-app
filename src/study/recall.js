@@ -1,26 +1,25 @@
-import { isCorrectRecall } from "../utils.js";
+import { escapeHtml } from "../utils.js";
 
-export function renderRecall(appEl, state, current, { renderProgressBar, save, setScreen, renderAll, feedback }) {
-  const counts = renderProgressBar(state);
-
-  const stageLabel = current.stage === 2 ? "Stage 2" : "Stage 3";
-  const stageSub = current.stage === 2 ? "(Exact recall)" : "(Memorization check)";
+export function renderRecall(appEl, state, current, deps) {
+  const progress = deps.renderProgressBar(state);
 
   appEl.innerHTML = `
     <section class="card">
-      ${counts}
+      ${progress}
 
-      <div style="display:flex; gap:10px; align-items: baseline; margin-top:12px;">
-        <h2 style="margin:0;">${stageLabel}</h2>
-        <span class="small">${stageSub}</span>
-      </div>
+      <h2 style="margin:12px 0 6px;">Recall</h2>
 
-      <p class="help" style="margin-top:10px;"><strong>Front:</strong> ${current.front}</p>
-      <p class="help" style="margin-top:-6px;">Type the exact definition (not case sensitive):</p>
+      <p class="help" style="margin-top:10px;">
+        <strong>Front:</strong> ${current.front}
+      </p>
 
-      <textarea id="recallInput" placeholder="Type the definition..."></textarea>
+      <textarea
+        id="recallInput"
+        placeholder="Answer here..."
+        style="width:100%; min-height:90px; margin-top:12px;"
+      ></textarea>
 
-      <div class="btns">
+      <div class="btns" style="margin-top:14px;">
         <button class="primary" id="submitRecall">Submit</button>
         <button class="danger" id="backToCreate">Back to Create</button>
       </div>
@@ -28,45 +27,50 @@ export function renderRecall(appEl, state, current, { renderProgressBar, save, s
   `;
 
   appEl.querySelector("#backToCreate").addEventListener("click", () => {
-    setScreen("create");
-    save();
-    renderAll();
-  });
-
-  const inputEl = appEl.querySelector("#recallInput");
-  inputEl.focus();
-
-  inputEl.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      appEl.querySelector("#submitRecall").click();
-    }
+    deps.setScreen("create");
+    deps.save();
+    deps.renderAll();
   });
 
   appEl.querySelector("#submitRecall").addEventListener("click", () => {
-    const userAnswer = inputEl.value ?? "";
-    const correct = isCorrectRecall(userAnswer, current.back);
+    const inputEl = appEl.querySelector("#recallInput");
+    const userAnswer = inputEl.value.trim();
+
+    if (!userAnswer) {
+      alert("Please enter an answer.");
+      return;
+    }
+
+    const correctAnswer = current.back.trim();
+
+    const normalize = s =>
+      s
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
 
     const c = state.cards.find(x => x.id === current.id);
     if (!c) return;
 
     if (c.stage === 2) {
-      if (correct) {
+      if (isCorrect) {
         c.stage = 3;
-        c.stage3Mastered = false;
       } else {
         c.stage = 1;
-        c.stage3Mastered = false;
       }
     } else if (c.stage === 3) {
-      if (correct) {
-        c.stage3Mastered = true;
-      } else {
+      if (!isCorrect) {
         c.stage = 2;
-        c.stage3Mastered = false;
       }
     }
 
-    save();
-    feedback({ correct, current, userAnswer });
+    deps.save();
+    deps.feedback({
+      correct: isCorrect,
+      current,
+      userAnswer
+    });
   });
 }
