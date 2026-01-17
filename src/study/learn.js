@@ -8,38 +8,34 @@ export function renderLearn(appEl, state, current, deps) {
     <section class="card">
       ${progress}
 
-      <!-- Centered title -->
+      <!-- Centered stage title -->
       <h2 style="margin:12px 0 10px; text-align:center;">Learn</h2>
 
-      <!-- Front value, larger and without label -->
+      <!-- Front prompt: large, bold, centered -->
       <div
         style="
           font-size:1.6rem;
           font-weight:700;
           text-align:center;
-          margin:12px 0 16px;
+          margin:12px 0 18px;
         "
       >
         ${current.front}
       </div>
 
-      <p class="help" style="text-align:center; margin-top:-6px;">
+      <p class="help" style="text-align:center; margin-bottom:10px;">
         Choose the correct answer:
       </p>
 
-      <div style="display:grid; gap:10px; margin-top:12px;">
-        ${options
-          .map(
-            (opt, i) => `
-              <button class="mcOpt" data-idx="${i}">
-                ${opt.text}
-              </button>
-            `
-          )
-          .join("")}
+      <div style="display:grid; gap:10px;">
+        ${options.map((opt, i) => `
+          <button class="mcOpt" data-idx="${i}">
+            ${opt.text}
+          </button>
+        `).join("")}
       </div>
 
-      <div class="btns" style="margin-top:14px;">
+      <div class="btns" style="margin-top:16px;">
         <button class="danger" id="backToCreate">Back to Create</button>
       </div>
     </section>
@@ -51,22 +47,24 @@ export function renderLearn(appEl, state, current, deps) {
     deps.renderAll();
   });
 
-  appEl.querySelectorAll(".mcOpt").forEach((btn) => {
+  appEl.querySelectorAll(".mcOpt").forEach(btn => {
     btn.addEventListener("click", (e) => {
       const i = Number(e.currentTarget.getAttribute("data-idx"));
       const choice = options[i];
 
-      const c = state.cards.find((x) => x.id === current.id);
+      const c = state.cards.find(x => x.id === current.id);
       if (!c) return;
 
-      // Learn stage: correct → Stage 2, incorrect → stay Stage 1
-      if (choice.isCorrect) c.stage = 2;
+      // Learn: correct → Stage 2, incorrect → stay Stage 1
+      if (choice.isCorrect) {
+        c.stage = 2;
+      }
 
       deps.save();
       deps.feedback({
         correct: Boolean(choice.isCorrect),
         current,
-        userAnswer: choice.text,
+        userAnswer: choice.text
       });
     });
   });
