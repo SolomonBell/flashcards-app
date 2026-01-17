@@ -45,53 +45,87 @@ export function renderLearn(appEl, state, current, deps) {
     deps.renderAll();
   });
 
-  let resolved = false;
-
   const buttons = Array.from(appEl.querySelectorAll(".mcOpt"));
 
-  buttons.forEach(btn => {
+  // Two-step state machine for this card:
+  // step = "answer" -> first click shows feedback
+  // step = "advance" -> second click moves to next card
+  let step = "answer";
+  let revealTimerDone = false;
+
+  function goNext() {
+    deps.renderAll();
+  }
+
+  buttons.forEach((btn) => {
     btn.addEventListener("click", (e) => {
-      if (resolved) {
-        // After reveal, clicking anywhere advances
-        deps.renderAll();
+      const idx = Number(e.currentTarget.getAttribute("data-idx"));
+      const choice = options[idx];
+
+      // SECOND CLICK: advance (only after reveal completes)
+      if (step === "advance") {
+        goNext();
         return;
       }
 
-      resolved = true;
+      // FIRST CLICK: show feedback
+      step = "advance";
 
-      const i = Number(e.currentTarget.getAttribute("data-idx"));
-      const choice = options[i];
+      // Disable buttons so they don't look clickable for choosing again
+      // But they still receive click events; that's okay because we use "step".
+      buttons.forEach(b => {
+        b.disabled = true;
+        b.style.cursor = "pointer"; // still feels like "tap to continue"
+      });
 
-      // Disable all buttons
-      buttons.forEach(b => (b.disabled = true));
-
+      // Immediate color on chosen option
       const selectedBtn = e.currentTarget;
-
-      // Immediate feedback on selection
       if (choice.isCorrect) {
         selectedBtn.style.background = "#bbf7d0"; // light green
       } else {
         selectedBtn.style.background = "#fecaca"; // light red
       }
 
+      // Apply stage logic immediately (no waiting)
       const c = state.cards.find(x => x.id === current.id);
       if (!c) return;
 
-      // Learn stage logic
       if (choice.isCorrect) {
-        c.stage = 2;
+        c.stage = 2; // correct in Learn -> Stage 2
       }
-
+      // wrong stays stage 1
       deps.save();
 
-      // After delay, reveal the correct answer in green
+      // After a brief delay, reveal the correct answer in green (especially useful when wrong)
       setTimeout(() => {
-        buttons.forEach((b, idx) => {
-          if (options[idx].isCorrect) {
+        buttons.forEach((b, i) => {
+          if (options[i].isCorrect) {
             b.style.background = "#bbf7d0"; // light green
           }
         });
-      }, 350);
+
+        // Now the user can click again to continue (step already set)
+        revealTimerDone = true;
+      }, 300);
     });
+  });
+
+  // Extra safety: if user clicks extremely fast (double click),
+  // the second click might happen before the reveal shows.
+  // We ensure they only advance after reveal delay completes.
+  function guardAdvanceClicks() {
+    if (step !== "advance") return;
+    if (!revealTimerDone) return;
+  }
+
+  // Patch: override advance behavior to wait for reveal completion.
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      if (step === "advance" && !revealTimerDone) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }, true);
   });
 }
