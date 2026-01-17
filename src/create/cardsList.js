@@ -26,6 +26,7 @@ export function renderCardsList(state) {
 }
 
 export function wireCardsListHandlers(rootEl, state, { save, render, blankCard }) {
+  // ✅ Auto-save edits WITHOUT re-rendering (prevents focus loss)
   rootEl.querySelectorAll("textarea[data-field]").forEach(el => {
     el.addEventListener("input", (e) => {
       const row = e.target.closest(".cardRow");
@@ -33,21 +34,28 @@ export function wireCardsListHandlers(rootEl, state, { save, render, blankCard }
       const field = e.target.getAttribute("data-field");
       const card = state.cards.find(x => x.id === id);
       if (!card) return;
+
       card[field] = e.target.value;
       save();
-      render();
+      // 🚫 no render() here
     });
   });
 
+  // Delete card (this DOES re-render, which is fine)
   rootEl.querySelectorAll('button[data-action="delete"]').forEach(btn => {
     btn.addEventListener("click", (e) => {
       const row = e.target.closest(".cardRow");
       const id = row.getAttribute("data-id");
+      const card = state.cards.find(x => x.id === id);
+      if (!card) return;
+
       if (!confirm("Delete this card?")) return;
+
       state.cards = state.cards.filter(x => x.id !== id);
       if (state.cards.length === 0) state.cards.push(blankCard());
+
       save();
-      render();
+      render(); // OK here
     });
   });
 }
