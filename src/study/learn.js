@@ -48,73 +48,95 @@ export function renderLearn(appEl, state, current, deps) {
   const mcWrap = appEl.querySelector("#mcWrap");
   const buttons = Array.from(appEl.querySelectorAll(".mcOpt"));
 
-  // step: "answer" -> waiting for first click
-  // step: "revealing" -> showing correct option after delay
-  // step: "ready" -> next click advances
+  // step: "answer" -> first click shows feedback
+  // step: "ready"  -> next click advances
   let step = "answer";
-
-  function setAllButtonsUnclickableLook() {
-    // Makes it feel like you already "answered", but still clickable for next-step
-    buttons.forEach(b => {
-      b.style.opacity = "0.95";
-    });
-  }
 
   function revealCorrect() {
     buttons.forEach((b, i) => {
-      if (options[i].isCorrect) {
-        b.style.background = "#bbf7d0"; // light green
-      }
+      if (options[i].isCorrect) b.style.background = "#bbf7d0"; // light green
     });
   }
 
-  // Second click: anywhere inside mcWrap advances, but only when step === "ready"
-  mcWrap.addEventListener("click", (e) => {
-    if (step !== "ready") return;
+  function answerWithIndex(idx) {
+    if (step !== "answer") return;
+    const btn = buttons[idx];
+    if (!btn) return;
 
-    // Only advance if they clicked on a button (keeps it intuitive)
+    step = "revealing";
+
+    const choice = options[idx];
+
+    // Immediate color on selected
+    if (choice.isCorrect) {
+      btn.style.background = "#bbf7d0"; // light green
+    } else {
+      btn.style.background = "#fecaca"; // light red
+    }
+
+    // Apply Learn-stage logic immediately
+    const c = state.cards.find(x => x.id === current.id);
+    if (!c) return;
+
+    if (choice.isCorrect) c.stage = 2; // correct -> Stage 2
+    deps.save();
+
+    // Reveal correct after a brief delay, then allow click/keypress to continue
+    setTimeout(() => {
+      revealCorrect();
+      step = "ready";
+    }, 300);
+  }
+
+  // Click behavior:
+  // - first click answers
+  // - second click advances
+  mcWrap.addEventListener("click", (e) => {
     const btn = e.target.closest(".mcOpt");
     if (!btn) return;
 
-    deps.renderAll();
+    const idx = Number(btn.getAttribute("data-idx"));
+
+    if (step === "ready") {
+      deps.renderAll();
+      return;
+    }
+
+    answerWithIndex(idx);
   });
 
-  buttons.forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      // If already ready, do nothing here — mcWrap handles advancing
-      if (step !== "answer") return;
+  // Keyboard shortcuts: 1–4 select choices (equivalent to clicking)
+  function onKeyDown(e) {
+    // Don't interfere with browser shortcuts
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-      step = "revealing";
+    const k = e.key;
 
-      const idx = Number(btn.getAttribute("data-idx"));
-      const choice = options[idx];
+    // If ready, any of 1-4 should act like clicking again (advance)
+    if (step === "ready" && (k === "1" || k === "2" || k === "3" || k === "4")) {
+      e.preventDefault();
+      deps.renderAll();
+      return;
+    }
 
-      // Immediate color on the clicked option
-      if (choice.isCorrect) {
-        btn.style.background = "#bbf7d0"; // light green
-      } else {
-        btn.style.background = "#fecaca"; // light red
+    if (step !== "answer") return;
+
+    if (k === "1" || k === "2" || k === "3" || k === "4") {
+      e.preventDefault();
+      const idx = Number(k) - 1;
+      if (idx < buttons.length) {
+        answerWithIndex(idx);
       }
+    }
+  }
 
-      setAllButtonsUnclickableLook();
+  document.addEventListener("keydown", onKeyDown);
 
-      // Apply Learn-stage logic immediately
-      const c = state.cards.find(x => x.id === current.id);
-      if (!c) return;
-
-      if (choice.isCorrect) {
-        c.stage = 2; // correct -> Stage 2
-      }
-      // wrong stays Stage 1
-      deps.save();
-
-      // After short delay, show the correct one green (especially useful when wrong)
-      setTimeout(() => {
-        revealCorrect();
-        step = "ready";
-        // Optional: subtle hint by changing cursor
-        buttons.forEach(b => (b.style.cursor = "pointer"));
-      }, 300);
-    });
-  });
+  // Clean up listener when screen changes (prevents stacking listeners)
+  // We remove it right before leaving via renderAll / backToCreate naturally because screen rerenders.
+  const origRenderAll = deps.renderAll;
+  deps.renderAll = () => {
+    document.removeEventListener("keydown", onKeyDown);
+    origRenderAll();
+  };
 }

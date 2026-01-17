@@ -3,36 +3,57 @@ import { escapeHtml } from "../utils.js";
 export function renderRecall(appEl, state, current, deps) {
   const progress = deps.renderProgressBar(state);
 
-  // Local UI state for this render
   let step = "answer"; // "answer" -> "result"
   let lastResult = null; // { isCorrect, userAnswer, correctAnswer }
 
   function normalize(s) {
-    // Case-insensitive exact match (Hello == hello, but "h ello" != "hello")
     return String(s ?? "").trim().toLowerCase();
   }
 
   function applyStageRules(card, isCorrect) {
     if (card.stage === 2) {
       if (isCorrect) {
-        // Stage 2 pass -> Stage 3 (blue earned); green not yet
         card.stage = 3;
         card.stage3Mastered = false;
       } else {
-        // Stage 2 fail -> back to Learn; lose green
         card.stage = 1;
         card.stage3Mastered = false;
       }
     } else if (card.stage === 3) {
       if (isCorrect) {
-        // Stage 3 correct => green earned
         card.stage3Mastered = true;
       } else {
-        // Stage 3 fail -> drop to Stage 2 and lose green
         card.stage = 2;
         card.stage3Mastered = false;
       }
     }
+  }
+
+  function submitAnswer() {
+    const inputEl = appEl.querySelector("#recallInput");
+    const userAnswer = inputEl.value.trim();
+
+    if (!userAnswer) {
+      alert("Please enter an answer.");
+      return;
+    }
+
+    const correctAnswer = String(current.back ?? "").trim();
+    const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
+
+    const c = state.cards.find(x => x.id === current.id);
+    if (!c) return;
+
+    applyStageRules(c, isCorrect);
+    deps.save();
+
+    lastResult = { isCorrect, userAnswer, correctAnswer };
+    step = "result";
+    render();
+  }
+
+  function goNext() {
+    deps.renderAll();
   }
 
   function render() {
@@ -64,8 +85,8 @@ export function renderRecall(appEl, state, current, deps) {
     const inputBg =
       step === "result" && lastResult
         ? lastResult.isCorrect
-          ? "#bbf7d0" // light green
-          : "#fecaca" // light red
+          ? "#bbf7d0"
+          : "#fecaca"
         : "";
 
     appEl.innerHTML = `
@@ -107,7 +128,6 @@ export function renderRecall(appEl, state, current, deps) {
 
     const inputEl = appEl.querySelector("#recallInput");
 
-    // If we already answered, show what they typed
     if (lastResult?.userAnswer != null) {
       inputEl.value = lastResult.userAnswer;
     }
@@ -119,31 +139,33 @@ export function renderRecall(appEl, state, current, deps) {
     });
 
     if (step === "answer") {
-      appEl.querySelector("#submitRecall").addEventListener("click", () => {
-        const userAnswer = inputEl.value.trim();
-        if (!userAnswer) {
-          alert("Please enter an answer.");
-          return;
+      appEl.querySelector("#submitRecall").addEventListener("click", submitAnswer);
+
+      // ✅ Enter = Submit (Shift+Enter still makes a newline)
+      inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          submitAnswer();
         }
-
-        const correctAnswer = String(current.back ?? "").trim();
-        const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
-
-        const c = state.cards.find(x => x.id === current.id);
-        if (!c) return;
-
-        applyStageRules(c, isCorrect);
-
-        deps.save();
-
-        lastResult = { isCorrect, userAnswer, correctAnswer };
-        step = "result";
-        render();
       });
+
+      // Auto-focus feels great here
+      inputEl.focus();
     } else {
-      appEl.querySelector("#nextBtn").addEventListener("click", () => {
-        deps.renderAll();
-      });
+      appEl.querySelector("#nextBtn").addEventListener("click", goNext);
+
+      // ✅ Enter = Next on result screen
+      document.addEventListener(
+        "keydown",
+        function onKeyDown(e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            document.removeEventListener("keydown", onKeyDown);
+            goNext();
+          }
+        },
+        { once: true }
+      );
     }
   }
 
