@@ -10,21 +10,43 @@ export function renderFeedback(appEl, state, { correct, current, userAnswer }, d
   appEl.innerHTML = `
     <section class="card">
       ${progress}
-      <h2 style="margin:12px 0 8px;">${correct ? "✅ Correct" : "❌ Incorrect"}</h2>
 
-      <p class="help"><strong>Front:</strong> ${safeFront}</p>
+      <!-- Centered status -->
+      <h2 style="margin:12px 0 10px; text-align:center;">
+        ${correct ? "✅ Correct" : "❌ Incorrect"}
+      </h2>
 
-      <p class="help" style="margin-top:8px;"><strong>Answer:</strong></p>
-      <div class="card" style="border-radius:10px; padding:12px; margin-top:-6px;">
-        <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${safeUser}</pre>
+      <!-- Front value, larger and without label -->
+      <div
+        style="
+          font-size:1.6rem;
+          font-weight:700;
+          text-align:center;
+          margin:12px 0 16px;
+        "
+      >
+        ${safeFront}
       </div>
 
-      <p class="help" style="margin-top:10px;"><strong>Correct Answer:</strong></p>
-      <div class="card" style="border-radius:10px; padding:12px; margin-top:-6px;">
-        <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${safeCorrect}</pre>
+      <div style="margin-top:6px;">
+        <p class="help" style="text-align:center; margin:0 0 8px;">
+          <strong>Answer</strong>
+        </p>
+        <div class="card" style="border-radius:10px; padding:12px;">
+          <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${safeUser}</pre>
+        </div>
       </div>
 
-      <div class="btns" style="margin-top:14px;">
+      <div style="margin-top:14px;">
+        <p class="help" style="text-align:center; margin:0 0 8px;">
+          <strong>Correct Answer</strong>
+        </p>
+        <div class="card" style="border-radius:10px; padding:12px;">
+          <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${safeCorrect}</pre>
+        </div>
+      </div>
+
+      <div class="btns" style="margin-top:16px;">
         <button class="primary" id="nextBtn">Next</button>
         <button class="danger" id="backToCreate2">Back to Create</button>
       </div>
