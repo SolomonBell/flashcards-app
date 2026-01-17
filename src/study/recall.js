@@ -3,86 +3,142 @@ import { escapeHtml } from "../utils.js";
 export function renderRecall(appEl, state, current, deps) {
   const progress = deps.renderProgressBar(state);
 
-  appEl.innerHTML = `
-    <section class="card">
-      ${progress}
+  // Local UI state for this render
+  let step = "answer"; // "answer" -> "result"
+  let lastResult = null; // { isCorrect, userAnswer, correctAnswer }
 
-      <h2 style="margin:12px 0 10px; text-align:center;">Recall</h2>
+  function normalize(s) {
+    // Case-insensitive exact match (Hello == hello, but "h ello" != "hello")
+    return String(s ?? "").trim().toLowerCase();
+  }
 
-      <div
-        style="
-          font-size:1.6rem;
-          font-weight:700;
-          text-align:center;
-          margin:12px 0 16px;
-        "
-      >
-        ${escapeHtml(current.front)}
-      </div>
-
-      <textarea
-        id="recallInput"
-        placeholder="Answer here..."
-        style="width:100%; min-height:90px; margin-top:8px;"
-      ></textarea>
-
-      <div class="btns" style="margin-top:14px;">
-        <button class="primary" id="submitRecall">Submit</button>
-        <button class="danger" id="backToCreate">Back to Create</button>
-      </div>
-    </section>
-  `;
-
-  appEl.querySelector("#backToCreate").addEventListener("click", () => {
-    deps.setScreen("create");
-    deps.save();
-    deps.renderAll();
-  });
-
-  appEl.querySelector("#submitRecall").addEventListener("click", () => {
-    const inputEl = appEl.querySelector("#recallInput");
-    const userAnswer = inputEl.value.trim();
-
-    if (!userAnswer) {
-      alert("Please enter an answer.");
-      return;
-    }
-
-    const correctAnswer = (current.back ?? "").trim();
-
-    // Case-insensitive, exact otherwise (allows "Hello" == "hello" but not "h ello")
-    const normalize = (s) => String(s).trim().toLowerCase();
-    const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
-
-    const c = state.cards.find(x => x.id === current.id);
-    if (!c) return;
-
-    if (c.stage === 2) {
+  function applyStageRules(card, isCorrect) {
+    if (card.stage === 2) {
       if (isCorrect) {
         // Stage 2 pass -> Stage 3 (blue earned); green not yet
-        c.stage = 3;
-        c.stage3Mastered = false;
+        card.stage = 3;
+        card.stage3Mastered = false;
       } else {
         // Stage 2 fail -> back to Learn; lose green
-        c.stage = 1;
-        c.stage3Mastered = false;
+        card.stage = 1;
+        card.stage3Mastered = false;
       }
-    } else if (c.stage === 3) {
+    } else if (card.stage === 3) {
       if (isCorrect) {
-        // ✅ This is what makes GREEN appear
-        c.stage3Mastered = true;
+        // Stage 3 correct => green earned
+        card.stage3Mastered = true;
       } else {
         // Stage 3 fail -> drop to Stage 2 and lose green
-        c.stage = 2;
-        c.stage3Mastered = false;
+        card.stage = 2;
+        card.stage3Mastered = false;
       }
     }
+  }
 
-    deps.save();
-    deps.feedback({
-      correct: isCorrect,
-      current,
-      userAnswer
+  function render() {
+    const frontHtml = escapeHtml(current.front ?? "");
+
+    const resultBlock =
+      step === "result" && lastResult
+        ? `
+          <div style="margin-top:14px;">
+            <p class="help" style="text-align:center; margin:0 0 8px;">
+              <strong>Correct Answer</strong>
+            </p>
+            <div class="card" style="border-radius:10px; padding:12px;">
+              <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${escapeHtml(
+                lastResult.correctAnswer
+              )}</pre>
+            </div>
+          </div>
+        `
+        : "";
+
+    const inputBg =
+      step === "result" && lastResult
+        ? lastResult.isCorrect
+          ? "#bbf7d0" // light green
+          : "#fecaca" // light red
+        : "";
+
+    appEl.innerHTML = `
+      <section class="card">
+        ${progress}
+
+        <h2 style="margin:12px 0 10px; text-align:center;">Recall</h2>
+
+        <div
+          style="
+            font-size:1.6rem;
+            font-weight:700;
+            text-align:center;
+            margin:12px 0 16px;
+          "
+        >
+          ${frontHtml}
+        </div>
+
+        <textarea
+          id="recallInput"
+          placeholder="Answer here..."
+          style="width:100%; min-height:90px; margin-top:8px; background:${inputBg};"
+          ${step === "result" ? "disabled" : ""}
+        ></textarea>
+
+        ${resultBlock}
+
+        <div class="btns" style="margin-top:16px;">
+          ${
+            step === "answer"
+              ? `<button class="primary" id="submitRecall">Submit</button>`
+              : `<button class="primary" id="nextBtn">Next</button>`
+          }
+          <button class="danger" id="backToCreate">Back to Create</button>
+        </div>
+      </section>
+    `;
+
+    const inputEl = appEl.querySelector("#recallInput");
+
+    // If we already answered, show what they typed
+    if (lastResult?.userAnswer != null) {
+      inputEl.value = lastResult.userAnswer;
+    }
+
+    appEl.querySelector("#backToCreate").addEventListener("click", () => {
+      deps.setScreen("create");
+      deps.save();
+      deps.renderAll();
     });
-  });
+
+    if (step === "answer") {
+      appEl.querySelector("#submitRecall").addEventListener("click", () => {
+        const userAnswer = inputEl.value.trim();
+        if (!userAnswer) {
+          alert("Please enter an answer.");
+          return;
+        }
+
+        const correctAnswer = String(current.back ?? "").trim();
+        const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
+
+        const c = state.cards.find(x => x.id === current.id);
+        if (!c) return;
+
+        applyStageRules(c, isCorrect);
+
+        deps.save();
+
+        lastResult = { isCorrect, userAnswer, correctAnswer };
+        step = "result";
+        render();
+      });
+    } else {
+      appEl.querySelector("#nextBtn").addEventListener("click", () => {
+        deps.renderAll();
+      });
+    }
+  }
+
+  render();
 }
