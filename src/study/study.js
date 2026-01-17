@@ -27,7 +27,7 @@ export function buildMCOptions(currentCard, allCards) {
 
   while (wrongs.length < 3) {
     wrongs.push({
-      text: "(Add more cards for better choices)",
+      text: "Add more cards for better choices.",
       isCorrect: false
     });
   }
@@ -41,9 +41,7 @@ function pickNextCard(cards) {
   const memorized = cards.filter(c => c.stage === 3);
 
   if (learn.length === 0 && recall.length === 0) {
-    return memorized.length
-      ? pickLeastRecentlySeen(memorized)
-      : null;
+    return memorized.length ? pickLeastRecentlySeen(memorized) : null;
   }
 
   if (memorized.length > 0 && Math.random() < STAGE3_INJECTION_CHANCE) {
@@ -53,9 +51,7 @@ function pickNextCard(cards) {
   if (learn.length) return pickLeastRecentlySeen(learn);
   if (recall.length) return pickLeastRecentlySeen(recall);
 
-  return memorized.length
-    ? pickLeastRecentlySeen(memorized)
-    : null;
+  return memorized.length ? pickLeastRecentlySeen(memorized) : null;
 }
 
 export function renderStudyScreen(appEl, state, deps) {
@@ -81,9 +77,11 @@ export function renderStudyScreen(appEl, state, deps) {
     return;
   }
 
-  const card = state.cards.find(c => c.id === current.id);
-  markSeen(card);
-  deps.save();
+  const card = state.cards.find(c => c.id === current.id) ?? current;
+  if (card) {
+    markSeen(card);
+    deps.save();
+  }
 
   const safeCard = {
     ...card,
