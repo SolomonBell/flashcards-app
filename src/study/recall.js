@@ -7,16 +7,25 @@ export function renderRecall(appEl, state, current, deps) {
     <section class="card">
       ${progress}
 
-      <h2 style="margin:12px 0 6px;">Recall</h2>
+      <!-- Centered title -->
+      <h2 style="margin:12px 0 10px; text-align:center;">Recall</h2>
 
-      <p class="help" style="margin-top:10px;">
-        <strong>Front:</strong> ${current.front}
-      </p>
+      <!-- Front value, larger and without label -->
+      <div
+        style="
+          font-size:1.6rem;
+          font-weight:700;
+          text-align:center;
+          margin:12px 0 16px;
+        "
+      >
+        ${escapeHtml(current.front)}
+      </div>
 
       <textarea
         id="recallInput"
         placeholder="Answer here..."
-        style="width:100%; min-height:90px; margin-top:12px;"
+        style="width:100%; min-height:90px; margin-top:8px;"
       ></textarea>
 
       <div class="btns" style="margin-top:14px;">
@@ -44,10 +53,7 @@ export function renderRecall(appEl, state, current, deps) {
     const correctAnswer = current.back.trim();
 
     const normalize = s =>
-      s
-        .toLowerCase()
-        .replace(/\s+/g, " ")
-        .trim();
+      s.toLowerCase().replace(/\s+/g, " ").trim();
 
     const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
 
