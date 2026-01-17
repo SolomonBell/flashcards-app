@@ -39,13 +39,20 @@ export function renderRecall(appEl, state, current, deps) {
     const frontHtml = escapeHtml(current.front ?? "");
 
     const resultBlock =
-      step === "result" && lastResult
+      step === "result" && lastResult && !lastResult.isCorrect
         ? `
           <div style="margin-top:14px;">
             <p class="help" style="text-align:center; margin:0 0 8px;">
               <strong>Correct Answer</strong>
             </p>
-            <div class="card" style="border-radius:10px; padding:12px;">
+            <div
+              class="card"
+              style="
+                border-radius:10px;
+                padding:12px;
+                background:#bbf7d0;
+              "
+            >
               <pre style="margin:0; white-space:pre-wrap; font-family:inherit;">${escapeHtml(
                 lastResult.correctAnswer
               )}</pre>
