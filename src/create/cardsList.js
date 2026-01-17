@@ -13,12 +13,12 @@ export function renderCardsList(state) {
       <div class="cardRowGrid">
         <div>
           <label class="label" style="display:block; text-align:center;">Front</label>
-          <textarea data-field="front" placeholder="Term / question">${escapeHtml(c.front)}</textarea>
+          <textarea data-field="front" placeholder="Question">${escapeHtml(c.front)}</textarea>
         </div>
 
         <div>
           <label class="label" style="display:block; text-align:center;">Back</label>
-          <textarea data-field="back" placeholder="Definition / answer">${escapeHtml(c.back)}</textarea>
+          <textarea data-field="back" placeholder="Answer">${escapeHtml(c.back)}</textarea>
         </div>
       </div>
     </div>

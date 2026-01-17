@@ -128,7 +128,7 @@ export function renderCreateScreen(appEl, state, { save, setScreen, renderAll, r
       const noun = removed === 1 ? "card" : "cards";
     
       const ok = confirm(
-        `This will remove ${removed} ${noun} from the bottom of the list. Continue?`
+        `This will remove ${removed} ${noun} from the bottom of the list.`
       );
       if (!ok) return;
     
